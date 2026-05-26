@@ -32,8 +32,9 @@ The behaviour is as follows:
     - mem_wstrb is whether we are writing or reading: 4'b0000 = reading. Any bit is 1 = writing to that section
     - mem_rdata is the data returned by a read request
 
-    For the valid-ready interface, valid is asserted (and the other outputs do not change) until
-    ready is sent back. 
+    *** Valid is held high and data doesn't change until ready is sent back. ***
+    Once valid == 1 and ready == 1 the transaction is considered completed. 
+
 
 Both the instruction data and load/store requests. These requests are differentiated by picosoc.v:
     - A request is sent to SPI when mem_valid && mem_addr >= 4*MEM_WORDS && mem_addr < 32'h 0200_0000
@@ -42,11 +43,21 @@ Both the instruction data and load/store requests. These requests are differenti
       in the cache implementation)
 
 Cache functionality 
-    - To be transparent, this cache shuold be instantiated attached directly to the CPU memory interface.
+    - To be transparent, this cache should be instantiated attached directly to the CPU memory interface.
     - CPU side ports will be called cpu_mem_*, PicoSoC memory system side will be called mem_*
-    - mem_valid is calculated combinationally (whether to pass through the request: yes if cpu_mem_instr and miss_
-    - returned data will be passed through back to the cpu, and also update the cached value if the previous transaction was
-    - an instruction fetch miss. 
+    - *** THIS VERSION IS THE SIMPLE & LIGHTWEIGHT CACHE WITH 1 WORD PER LINE ***
+        - The entire cache is COMBINATIONAL (except for the cache data, tag, and valid registers)
+        - All the ports in memory interface is passed straight through the cache module with no delay, except:
+            - The valid signal is intercepted if there's a cache hit, and stays at 0 on the memory side
+            - The cpu_mem_ready is asserted with zero-cycle delay if there's a cache hit
+            - the cpu_mem_rdata is sent back according to the cache stored value with zero delay if there's a cache hit
+            - If there's a cache miss, the rdata is read (but not intercepted) on its way back through the cache and stored 
+        Note:
+            - This implementation assumes the CPU behaves correctly - cpu_mem_instr, addr, wstrb etc must not change 
+              once cpu_mem_valid is asserted until the ready is sent back, since we use these signals to mux the 
+              values sent back. (This is true by design)
+            - There may be glitches in the valid signal sent to the mem_source, but this is fine since the downstream
+              logic uses the valid signal synchronously. Just need to make sure timing is fine.
 
 */
 
@@ -92,7 +103,7 @@ module icache #(
 
     reg [31:0]          data_array  [0:LINES-1]; // stores the actual data (instructions)
     reg [TAG_BITS-1:0]  tag_array   [0:LINES-1];   // stores the tags for each line
-    reg [0:LINES-1]     valid_array; 
+    reg [LINES-1:0]     valid_array; 
 
     wire [IDX_BITS-1:0] index        = cpu_mem_addr[IDX_BITS+1:2]; // e.g. INDEX_BITS = 5 -> index = addr[6:2]
     wire [TAG_BITS-1:0] tag          = cpu_mem_addr[31:IDX_BITS+2];
@@ -102,7 +113,7 @@ module icache #(
     // Useful control signals
     wire is_instruction_fetch = cpu_mem_wstrb == 4'b0000 && cpu_mem_valid && cpu_mem_instr;
 
-    wire tag_match   = valid_array[index] && tag_array[index] == tag;
+    wire tag_match   = valid_array[index] && (tag_array[index] == tag);
     wire cache_hit   = tag_match && is_instruction_fetch;
     wire cache_miss  = ~tag_match && is_instruction_fetch;
 
@@ -119,7 +130,8 @@ module icache #(
     assign cpu_mem_ready = cache_hit ? 1'b1         : mem_ready; // immediately send back cache answer if hit
 
 
-    // State machine to keep track of whether we are waiting for a cache miss 
+    /* // State machine to keep track of whether we are waiting for a cache miss 
+    // We don't actually need the state machine, though, 
     reg    state; 
     reg    next_state;
     parameter IDLE = 1'b0, PENDING_MISS = 1'b1;
@@ -147,7 +159,7 @@ module icache #(
             end
             default: next_state <= IDLE;
         endcase
-    end
+    end */
 
     // data_regs transition
     always@(posedge clk) begin
@@ -155,7 +167,7 @@ module icache #(
             valid_array <= {LINES{1'b0}};
         end
         else begin
-            if(state == PENDING_MISS && next_state == IDLE) begin
+            if(cache_miss && mem_valid && mem_ready) begin
                 data_array[index] <= mem_rdata;
                 tag_array[index] <= tag;
                 valid_array[index] <= 1'b1;
