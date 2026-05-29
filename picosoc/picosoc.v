@@ -187,9 +187,7 @@ module picosoc (
 		if (ENABLE_ICACHE) begin : gen_icache
 			icache_multiword_lookahead #(
 				.LINES(64),
-				.IDX_BITS(6),
-				.WORDS_PER_LINE(16),
-				.WORD_SEL_BITS(4)
+				.WORDS_PER_LINE(16)
 			) icache_inst (
 				.clk(clk),
 				.resetn(resetn),

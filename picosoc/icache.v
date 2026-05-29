@@ -73,9 +73,21 @@ Cache functionality
               1 cycle delay (I think...)
 */
 
+function integer clog2;
+    input integer value;
+    integer v;
+    begin
+        v = value - 1;
+        for (clog2 = 0; v > 0; clog2 = clog2 + 1)
+            v = v >> 1;
+    end
+endfunction
+
+
+
 module icache_zerocycle #(
     parameter integer LINES = 32,
-    parameter integer IDX_BITS = 5 // set to $clog2(LINES) 
+    parameter integer IDX_BITS = clog2(LINES)
 ) (
     // Clock and reset
     input clk, 
@@ -192,7 +204,7 @@ endmodule
 
 module icache #(
     parameter integer LINES = 32,
-    parameter integer IDX_BITS = 5 // set to $clog2(LINES) 
+    parameter integer IDX_BITS = clog2(LINES)
 ) (
     // Clock and reset
     input clk, 
@@ -335,7 +347,7 @@ endmodule
 
 module icache_first_miss_bypass #(
     parameter integer LINES = 32,
-    parameter integer IDX_BITS = 5 // set to $clog2(LINES) 
+    parameter integer IDX_BITS = clog2(LINES)
 ) (
     // Clock and reset
     input clk, 
@@ -495,7 +507,7 @@ endmodule
 
 module icache_random_bypass #(
     parameter integer LINES = 32,
-    parameter integer IDX_BITS = 5 // set to $clog2(LINES) 
+    parameter integer IDX_BITS = clog2(LINES)
 ) (
     // Clock and reset
     input clk, 
@@ -649,9 +661,9 @@ endmodule
 
 module icache_multiword #(
     parameter integer LINES = 16,
-    parameter integer IDX_BITS = 4, // set to $clog2(LINES) 
+    parameter integer IDX_BITS = clog2(LINES),
     parameter integer WORDS_PER_LINE = 4,
-    parameter integer WORD_SEL_BITS = 2 // set to $clog2(WORDS_PER_LINE) 
+    parameter integer WORD_SEL_BITS = clog2(WORDS_PER_LINE)
 ) (
     // Clock and reset
     input clk, 
@@ -836,9 +848,9 @@ endmodule
 
 module icache_multiword_first_miss_bypass #(
     parameter integer LINES = 16,
-    parameter integer IDX_BITS = 4, // set to $clog2(LINES) 
+    parameter integer IDX_BITS = clog2(LINES),
     parameter integer WORDS_PER_LINE = 4,
-    parameter integer WORD_SEL_BITS = 2 // set to $clog2(WORDS_PER_LINE) 
+    parameter integer WORD_SEL_BITS = clog2(WORDS_PER_LINE)
 ) (
     // Clock and reset
     input clk, 
@@ -1054,9 +1066,9 @@ endmodule
 
 module icache_multiword_lookahead #(
     parameter integer LINES = 16,
-    parameter integer IDX_BITS = 4, // set to $clog2(LINES) 
+    parameter integer IDX_BITS = clog2(LINES),
     parameter integer WORDS_PER_LINE = 4,
-    parameter integer WORD_SEL_BITS = 2 // set to $clog2(WORDS_PER_LINE) 
+    parameter integer WORD_SEL_BITS = clog2(WORDS_PER_LINE)
 ) (
     // Clock and reset
     input clk, 
@@ -1214,6 +1226,7 @@ module icache_multiword_lookahead #(
     always@(posedge clk) begin
         if(!resetn) begin
             valid_array <= {LINES{1'b0}};
+            miss_rdata <= 32'b0;
         end
         else begin
             if(state == S_FILL && mem_ready) begin
