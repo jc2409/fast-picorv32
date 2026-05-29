@@ -3,6 +3,21 @@
 Cache Experimentation and Changes
 ======================================
 
+**Preliminary Results**
+ 
+| Integral Benchmark     |     CPI | 
+| -----------------------| -------:| 
+| Baseline (No Cache)    |  9.9374 |  
+| 128x16 Cache           |  5.9998 |
+| 64x16 with lookahead   |  5.0736 |
+
+| Bubble Sort Benchmark  |     CPI | 
+| -----------------------| -------:| 
+| Baseline (No Cache)    |  10.991 |  
+| 128x16 Cache           |  5.5699 |
+| 64x16 with lookahead   |  4.5159 |
+
+
 The file picosoc/icache.v contains the caches Kevin wrote. 
 The caches go in between the cpu's memory interface and the memory interface in picosoc.v (where the cache is instantiated), preserving the shape of the interface on both sides.
 There are many versions of the cache, with description/rationale. "Good" iterations are marked with (*)
