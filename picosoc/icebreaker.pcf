@@ -1,5 +1,5 @@
-# 12 MHz clock
-set_io clk        35
+# 12 MHz crystal -> PLL input (clk_in), multiplied to 15.9375 MHz on-chip
+set_io clk_in     35
 
 # RS232
 set_io ser_rx      6

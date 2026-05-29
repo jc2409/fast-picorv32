@@ -9,6 +9,11 @@
 #  error "Set -DICEBREAKER or -DHX8KDEMO when compiling firmware.c"
 #endif
 
+// System clock after the PLL (icepll -i 12 -o 16 -> 12 * 85 / 64).
+// T = 1 / F_CPU = 62.745 ns. Derive baud and timing from this one value.
+#define F_CPU 15937500
+#define BAUD  115200
+
 // a pointer to this is a null pointer, but the compiler does not
 // know that because "sram" is a linker symbol from sections.lds.
 extern uint32_t sram;
@@ -81,26 +86,138 @@ void enable_flash_crm()
 #endif
 
 // --------------------------------------------------------
+// Minimal UART output. A write to reg_uart_data stalls the CPU (via the
+// bus wait line) until the transmitter is free, so no busy-wait is needed.
 
-void setup_picosoc(void){
-	reg_uart_clkdiv = 104; // Baud = 1152060
-    reg_7seg = 0x00;       // represents GB3 2026
-	reg_leds = 0x00;
-	set_flash_qspi_flag();
-
+void putchar(char c)
+{
+	if (c == '\n')
+		putchar('\r');
+	reg_uart_data = c;
 }
 
-#define DELAY_K 10000
+void print(const char *p)
+{
+	while (*p)
+		putchar(*(p++));
+}
+
+void print_dec(uint32_t v)
+{
+	char buf[10];
+	int n = 0;
+	if (v == 0) {
+		putchar('0');
+		return;
+	}
+	while (v) {
+		buf[n++] = '0' + (v % 10);
+		v /= 10;
+	}
+	while (n)
+		putchar(buf[--n]);
+}
+
+// --------------------------------------------------------
+// Performance measurement: N (instructions), CPI, T.
+//
+// picorv32 is built with ENABLE_COUNTERS, so rdinstret gives N and rdcycle
+// gives elapsed cycles directly -- no hand counting. Reads bracket the
+// region as tightly as possible; an LED is toggled just outside the counted
+// region so a PicoScope on that pin should read ~ cycles * T.
+
+static inline uint32_t rd_cycle(void)
+{
+	uint32_t v;
+	__asm__ volatile ("rdcycle %0" : "=r"(v));
+	return v;
+}
+
+static inline uint32_t rd_instret(void)
+{
+	uint32_t v;
+	__asm__ volatile ("rdinstret %0" : "=r"(v));
+	return v;
+}
+
+#define BENCH_ITERS 10000
+
+void run_benchmark(void)
+{
+	uint32_t c0, c1, n0, n1;
+
+	// --- 1. Measure the fixed overhead of the counter reads themselves
+	//        (empty region) so it can be subtracted from the real result.
+	n0 = rd_instret();
+	c0 = rd_cycle();
+	c1 = rd_cycle();
+	n1 = rd_instret();
+	uint32_t ov_cycles = c1 - c0;
+	uint32_t ov_instr  = n1 - n0;
+
+	// --- 2. Measure the code under test: the blink delay loop.
+	//        `volatile i` guarantees the loop is never optimised away,
+	//        so N stays meaningful at any -O level.
+	reg_leds = 0x02;            // led1 HIGH: scope marker (outside the counted region)
+
+	n0 = rd_instret();
+	c0 = rd_cycle();
+	for (volatile int i = 0; i < BENCH_ITERS; i++)
+		;
+	c1 = rd_cycle();
+	n1 = rd_instret();
+
+	reg_leds = 0x00;            // scope marker LOW
+
+	// Net figures with the read overhead removed.
+	uint32_t N      = (n1 - n0) - ov_instr;
+	uint32_t cycles = (c1 - c0) - ov_cycles;
+
+	uint32_t cpi = cycles / N;
+
+	// Execution time. T = 1/F_CPU; total time = cycles * T.
+	// T_ps is a compile-time constant (folds, no libgcc). For the runtime
+	// product we keep everything in 32-bit: -nostdlib has no __udivdi3, so a
+	// 64-bit divide on a variable won't link. time_ns = cycles * 62.745,
+	// split as cycles*62745/1000 without overflowing 32 bits.
+	uint32_t T_ps    = (uint32_t)(1000000000000ull / F_CPU);   // 62745 ps = 62.745 ns
+	uint32_t time_ns = (cycles / 1000u) * T_ps + ((cycles % 1000u) * T_ps) / 1000u;
+
+	print("\n--- performance: blink delay loop ---\n");
+	print("iterations  = "); print_dec(BENCH_ITERS); print("\n");
+	print("N (instret) = "); print_dec(N);           print("\n");
+	print("cycles      = "); print_dec(cycles);      print("\n");
+	print("CPI         = "); print_dec(cpi);         print("\n");
+	print("T (ps)      = "); print_dec(T_ps);        print("\n");
+	print("time (ns)   = "); print_dec(time_ns);     print("   (= N * CPI * T = cycles * T)\n");
+	print("read overhead: cycles="); print_dec(ov_cycles);
+	print(" instr=");                print_dec(ov_instr); print("\n");
+	print("-------------------------------------\n");
+}
+
+// --------------------------------------------------------
+
+void setup_picosoc(void){
+	reg_uart_clkdiv = F_CPU / BAUD; // 138 at 15.9375 MHz -> 115200 baud
+	reg_7seg = 0x05;                // represents GB3 2026
+	reg_leds = 0x00;
+	set_flash_qspi_flag();
+}
+
+#define DELAY_K 10326
 
 void main()
 {
-    setup_picosoc();
-    
-    while (1){
-        for (int i = 0; i < DELAY_K; i++);
-        reg_leds = 0x02;
+	setup_picosoc();
 
-        for (int i = 0; i < DELAY_K; i++);
-        reg_leds = 0x00;
-    }
+	print("\nGB3 RISC-V @ 15.9375 MHz\n");
+	run_benchmark();
+
+	while (1){
+		for (int i = 0; i < DELAY_K; i++);
+		reg_leds = 0x02;
+
+		for (int i = 0; i < DELAY_K; i++);
+		reg_leds = 0x00;
+	}
 }
