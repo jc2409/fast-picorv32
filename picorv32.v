@@ -2454,57 +2454,57 @@ module picorv32_pcpi_div (
 		pcpi_wait_q <= pcpi_wait && resetn;
 	end
 
-	reg [31:0] dividend;
-	reg [62:0] divisor;
-	reg [31:0] quotient;
-	reg [31:0] quotient_msk;
-	reg running;
-	reg outsign;
+	// ---- GB3 compact restoring divider ------------------------------------
+	// Stock module used a 63-bit `divisor` register (pre-shifted left by 31,
+	// shifted right each cycle) and a 32-bit one-hot iteration mask.
+	// This version keeps the divisor at 32 bits and shifts the partial
+	// remainder *left*, with a 6-bit step counter. Same RV32M semantics
+	// (div/divu/rem/remu, div-by-zero and INT_MIN/-1 overflow), same ~33-cycle
+	// latency, but ~104 FF vs ~159 and a 33-bit subtract vs a 63-bit one.
+	reg [31:0] divisor_q;
+	reg [32:0] rem_q;          // 33-bit running remainder (extra bit for the shift)
+	reg [31:0] dq;             // dividend shifts out the top, quotient shifts in the bottom
+	reg [5:0]  step;
+	reg        running;
+	reg        outsign;
+
+	// One iteration: r' = (r << 1) | next_dividend_bit;
+	//                if r' >= divisor: r' -= divisor, q_bit = 1
+	wire [32:0] rem_shifted = {rem_q[31:0], dq[31]};
+	wire [32:0] sub         = rem_shifted - {1'b0, divisor_q};
+	wire        ge          = ~sub[32];   // no borrow => rem_shifted >= divisor
 
 	always @(posedge clk) begin
 		pcpi_ready <= 0;
-		pcpi_wr <= 0;
-		pcpi_rd <= 'bx;
+		pcpi_wr    <= 0;
+		pcpi_rd    <= 'bx;
 
 		if (!resetn) begin
 			running <= 0;
-		end else
-		if (start) begin
-			running <= 1;
-			dividend <= (instr_div || instr_rem) && pcpi_rs1[31] ? -pcpi_rs1 : pcpi_rs1;
-			divisor <= ((instr_div || instr_rem) && pcpi_rs2[31] ? -pcpi_rs2 : pcpi_rs2) << 31;
-			outsign <= (instr_div && (pcpi_rs1[31] != pcpi_rs2[31]) && |pcpi_rs2) || (instr_rem && pcpi_rs1[31]);
-			quotient <= 0;
-			quotient_msk <= 1 << 31;
-		end else
-		if (!quotient_msk && running) begin
-			running <= 0;
-			pcpi_ready <= 1;
-			pcpi_wr <= 1;
-`ifdef RISCV_FORMAL_ALTOPS
-			case (1)
-				instr_div:  pcpi_rd <= (pcpi_rs1 - pcpi_rs2) ^ 32'h7f8529ec;
-				instr_divu: pcpi_rd <= (pcpi_rs1 - pcpi_rs2) ^ 32'h10e8fd70;
-				instr_rem:  pcpi_rd <= (pcpi_rs1 - pcpi_rs2) ^ 32'h8da68fa5;
-				instr_remu: pcpi_rd <= (pcpi_rs1 - pcpi_rs2) ^ 32'h3138d0e1;
-			endcase
-`else
-			if (instr_div || instr_divu)
-				pcpi_rd <= outsign ? -quotient : quotient;
-			else
-				pcpi_rd <= outsign ? -dividend : dividend;
-`endif
-		end else begin
-			if (divisor <= dividend) begin
-				dividend <= dividend - divisor;
-				quotient <= quotient | quotient_msk;
+		end else if (start) begin
+			// Sign-convert so the loop is plain unsigned division
+			running   <= 1;
+			dq        <= ((instr_div || instr_rem) && pcpi_rs1[31]) ? -pcpi_rs1 : pcpi_rs1;
+			divisor_q <= ((instr_div || instr_rem) && pcpi_rs2[31]) ? -pcpi_rs2 : pcpi_rs2;
+			outsign   <= (instr_div && (pcpi_rs1[31] != pcpi_rs2[31]) && |pcpi_rs2) ||
+			             (instr_rem && pcpi_rs1[31]);
+			rem_q     <= 0;
+			step      <= 0;
+		end else if (running) begin
+			if (step == 6'd32) begin
+				// 32 iterations done: dq holds the quotient, rem_q[31:0] the remainder.
+				running    <= 0;
+				pcpi_ready <= 1;
+				pcpi_wr    <= 1;
+				if (instr_div || instr_divu)
+					pcpi_rd <= outsign ? -dq          : dq;
+				else
+					pcpi_rd <= outsign ? -rem_q[31:0] : rem_q[31:0];
+			end else begin
+				rem_q <= ge ? sub : rem_shifted;
+				dq    <= {dq[30:0], ge};
+				step  <= step + 1'd1;
 			end
-			divisor <= divisor >> 1;
-`ifdef RISCV_FORMAL_ALTOPS
-			quotient_msk <= quotient_msk >> 5;
-`else
-			quotient_msk <= quotient_msk >> 1;
-`endif
 		end
 	end
 endmodule
