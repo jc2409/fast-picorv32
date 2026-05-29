@@ -5,7 +5,9 @@ Cache Experimentation and Changes
 
 The file picosoc/icache.v contains the caches Kevin wrote. 
 The caches go in between the cpu's memory interface and the memory interface in picosoc.v (where the cache is instantiated), preserving the shape of the interface on both sides.
-There are many versions of the cache, with description/rationale. The main one to be used for the final processor is icache_multiword_lookahead.
+There are many versions of the cache, with description/rationale. "Good" iterations are marked with (*)
+
+The main one to be used for the final processor is icache_multiword_lookahead.
 
 icache_zerocycle
 
