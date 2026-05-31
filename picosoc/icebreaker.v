@@ -48,6 +48,7 @@ module icebreaker (
 	inout  flash_io3
 );
 	parameter integer MEM_WORDS = 32768;
+	parameter integer USE_CLK_DIVIDER = 0;
 
 	// Overclock: the 12 MHz crystal arrives on the pad `clk_in`. The PLL
 	// multiplies it to 28.125 MHz and we name that output `clk`, so every
@@ -61,9 +62,9 @@ module icebreaker (
 	wire pll_locked;
 	SB_PLL40_PAD #(
 		.FEEDBACK_PATH("SIMPLE"),
-		.DIVR(4'b0000),       // DIVR = 0
+		.DIVR(4'd0),       // DIVR = 0
 		.DIVF(7'b1010111),    // DIVF = 87  
-		.DIVQ(3'b101),        // DIVQ = 5 
+		.DIVQ(3'b110),        // DIVQ = 6
 		.FILTER_RANGE(3'b001)
 	) pll (
 		.PACKAGEPIN  (clk_in),
@@ -73,16 +74,27 @@ module icebreaker (
 		.BYPASS      (1'b0)
 	);
 
-	// /2 divider
-	reg clk_div = 1'b0;
-	always @(posedge pll_clk) clk_div <= ~clk_div;
+	wire clk;
 
-	// Route the divided clock onto a global clock buffer so the SoC sees a real clock.
-	wire clk;               
-	SB_GB clk_gb (
-		.USER_SIGNAL_TO_GLOBAL_BUFFER (clk_div),
-		.GLOBAL_BUFFER_OUTPUT         (clk)
-	);
+	generate
+	if (USE_CLK_DIVIDER) begin : gen_clk_divider
+		reg clk_div = 1'b0;
+
+		always @(posedge pll_clk) begin
+			clk_div <= ~clk_div;
+		end
+
+		SB_GB clk_gb (
+			.USER_SIGNAL_TO_GLOBAL_BUFFER (clk_div),
+			.GLOBAL_BUFFER_OUTPUT         (clk)
+		);
+	end else begin : gen_no_clk_divider
+		SB_GB clk_gb (
+			.USER_SIGNAL_TO_GLOBAL_BUFFER (pll_clk),
+			.GLOBAL_BUFFER_OUTPUT         (clk)
+		);
+	end
+	endgenerate
 
 	reg [5:0] reset_cnt = 0;
 	wire resetn = &reset_cnt && pll_locked;
