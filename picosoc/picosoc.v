@@ -29,6 +29,8 @@
 `define PICOSOC_MEM picosoc_mem
 `endif
 
+
+
 // this macro can be used to check if the verilog files in your
 // design are read in the correct order.
 `define PICOSOC_V
@@ -77,6 +79,8 @@ module picosoc (
 	parameter [0:0] ENABLE_COUNTERS = 1;
 	parameter [0:0] ENABLE_IRQ_QREGS = 0;
 
+	parameter [0:0] ENABLE_ICACHE = 1; // NEW
+
 	parameter integer MEM_WORDS = 256;
 	parameter [31:0] STACKADDR = (4*MEM_WORDS);       // end of memory
 	parameter [31:0] PROGADDR_RESET = 32'h 0010_0000; // 1 MB into flash
@@ -95,6 +99,7 @@ module picosoc (
 		irq[7] = irq_7;
 	end
 
+	// Memory system-facing memory interface (same as before)
 	wire mem_valid;
 	wire mem_instr;
 	wire mem_ready;
@@ -102,6 +107,15 @@ module picosoc (
 	wire [31:0] mem_wdata;
 	wire [3:0] mem_wstrb;
 	wire [31:0] mem_rdata;
+
+	// CPU-facing memory interface
+	wire cpu_mem_valid;
+	wire cpu_mem_instr;
+	wire cpu_mem_ready;
+	wire [31:0] cpu_mem_addr;
+	wire [31:0] cpu_mem_wdata;
+	wire [3:0] cpu_mem_wstrb;
+	wire [31:0] cpu_mem_rdata;
 
 	wire spimem_ready;
 	wire [31:0] spimem_rdata;
@@ -131,6 +145,11 @@ module picosoc (
 			spimemio_cfgreg_sel ? spimemio_cfgreg_do : simpleuart_reg_div_sel ? simpleuart_reg_div_do :
 			simpleuart_reg_dat_sel ? simpleuart_reg_dat_do : 32'h 0000_0000;
 
+	// Look-Ahead Interface
+	wire            cpu_mem_la_read;
+	wire     [31:0] cpu_mem_la_addr;
+
+
 	picorv32 #(
 		.STACKADDR(STACKADDR),
 		.PROGADDR_RESET(PROGADDR_RESET),
@@ -146,15 +165,64 @@ module picosoc (
 	) cpu (
 		.clk         (clk        ),
 		.resetn      (resetn     ),
-		.mem_valid   (mem_valid  ),
-		.mem_instr   (mem_instr  ),
-		.mem_ready   (mem_ready  ),
-		.mem_addr    (mem_addr   ),
-		.mem_wdata   (mem_wdata  ),
-		.mem_wstrb   (mem_wstrb  ),
-		.mem_rdata   (mem_rdata  ),
+		.mem_valid   (cpu_mem_valid  ),
+		.mem_instr   (cpu_mem_instr  ),
+		.mem_ready   (cpu_mem_ready  ),
+		.mem_addr    (cpu_mem_addr   ),
+		.mem_wdata   (cpu_mem_wdata  ),
+		.mem_wstrb   (cpu_mem_wstrb  ),
+		.mem_rdata   (cpu_mem_rdata  )
+		// Lookahead Interface
+		,
+		.mem_la_read (cpu_mem_la_read),
+		.mem_la_addr  (cpu_mem_la_addr),
+
+
 		.irq         (irq        )
 	);
+
+
+		
+	generate
+		if (ENABLE_ICACHE) begin : gen_icache
+			icache_multiword_lookahead #(
+				.LINES(64),
+				.WORDS_PER_LINE(16)
+			) icache_inst (
+				.clk(clk),
+				.resetn(resetn),
+
+				.cpu_mem_valid(cpu_mem_valid),
+				.cpu_mem_instr(cpu_mem_instr),
+				.cpu_mem_addr(cpu_mem_addr),
+				.cpu_mem_wdata(cpu_mem_wdata),
+				.cpu_mem_wstrb(cpu_mem_wstrb),
+				.cpu_mem_ready(cpu_mem_ready),
+				.cpu_mem_rdata(cpu_mem_rdata),
+
+				// Lookahead interface
+				.cpu_mem_la_read (cpu_mem_la_read),
+				.cpu_mem_la_addr  (cpu_mem_la_addr),
+
+				.mem_valid(mem_valid),
+				.mem_instr(mem_instr),
+				.mem_addr(mem_addr),
+				.mem_wdata(mem_wdata),
+				.mem_wstrb(mem_wstrb),
+				.mem_ready(mem_ready),
+				.mem_rdata(mem_rdata)
+			);
+		end else begin : gen_no_icache
+			assign mem_valid      = cpu_mem_valid;
+			assign mem_instr      = cpu_mem_instr;
+			assign mem_addr       = cpu_mem_addr;
+			assign mem_wdata      = cpu_mem_wdata;
+			assign mem_wstrb      = cpu_mem_wstrb;
+			assign cpu_mem_ready  = mem_ready;
+			assign cpu_mem_rdata  = mem_rdata;
+		end
+	endgenerate
+ 
 
 	spimemio spimemio (
 		.clk    (clk),

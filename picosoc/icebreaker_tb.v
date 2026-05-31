@@ -68,7 +68,7 @@ module testbench;
 		// required for intialization of RAM
 		.MEM_WORDS(256)
 	) uut (
-		.clk      (clk      ),
+		.clk_in   (clk      ),
 		.led1     (led1     ),
 		.led2     (led2     ),
 		.led3     (led3     ),

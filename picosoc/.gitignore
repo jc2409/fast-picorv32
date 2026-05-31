@@ -26,4 +26,7 @@
 /icebreaker_sections.lds
 /testbench.vcd
 /cmos.log
+/icebreaker_blink.bin
+/icebreaker_blink.elf
+
 
