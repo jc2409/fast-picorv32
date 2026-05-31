@@ -24,7 +24,7 @@
 `define PICOSOC_MEM ice40up5k_spram
 
 module icebreaker (
-	input clk,
+	input clk_in,
 
 	output ser_tx,
 	input ser_rx,
@@ -49,8 +49,43 @@ module icebreaker (
 );
 	parameter integer MEM_WORDS = 32768;
 
+	// Overclock: the 12 MHz crystal arrives on the pad `clk_in`. The PLL
+	// multiplies it to 28.125 MHz and we name that output `clk`, so every
+	// existing reference downstream (reset, 7-seg, gpio, picosoc) keeps
+	// running off `clk` unchanged -- the PLL is inserted transparently
+	// between the pad and the SoC. We *can't* call the pad `clk`: SB_PLL40_PAD
+	// drives the fabric clock as its output, so the raw pin and the SoC clock
+	// must be two different nets. Dividers from `icepll -i 12 -o 16`
+	// (VCO 1020 MHz / 64).
+	wire pll_clk;
+	wire pll_locked;
+	SB_PLL40_PAD #(
+		.FEEDBACK_PATH("SIMPLE"),
+		.DIVR(4'b0000),       // DIVR = 0
+		.DIVF(7'b1001010),    // DIVF = 74  
+		.DIVQ(3'b101),        // DIVQ = 5   
+		.FILTER_RANGE(3'b001)
+	) pll (
+		.PACKAGEPIN  (clk_in),
+		.PLLOUTCORE  (pll_clk),
+		.LOCK        (pll_locked),
+		.RESETB      (1'b1),
+		.BYPASS      (1'b0)
+	);
+
+	// /2 divider
+	reg clk_div = 1'b0;
+	always @(posedge pll_clk) clk_div <= ~clk_div;
+
+	// Route the divided clock onto a global clock buffer so the SoC sees a real clock.
+	wire clk;               
+	SB_GB clk_gb (
+		.USER_SIGNAL_TO_GLOBAL_BUFFER (clk_div),
+		.GLOBAL_BUFFER_OUTPUT         (clk)
+	);
+
 	reg [5:0] reset_cnt = 0;
-	wire resetn = &reset_cnt;
+	wire resetn = &reset_cnt && pll_locked;
 
 	always @(posedge clk) begin
 		reset_cnt <= reset_cnt + !resetn;

@@ -62,14 +62,13 @@ module testbench;
 		#1 $display("%b", leds);
 	end
 
-		`ifdef SYNTH_SIM
-		icebreaker uut (
-		`else
-		icebreaker #(
-			.MEM_WORDS(32768)
-		) uut (
-		`endif
-		.clk      (clk      ),
+	icebreaker #(
+		// We limit the amount of memory in simulation
+		// in order to avoid reduce simulation time
+		// required for intialization of RAM
+		.MEM_WORDS(256)
+	) uut (
+		.clk_in   (clk      ),
 		.led1     (led1     ),
 		.led2     (led2     ),
 		.led3     (led3     ),

@@ -37,6 +37,10 @@ extern uint32_t sram;
 #define reg_uart_data (*(volatile uint32_t*)0x02000008)
 #define reg_leds (*(volatile uint32_t*)0x03000000)
 
+// System clock: 12 MHz crystal multiplied to 28.125 MHz by the PLL and then divided by 2, so 14.0625 MHz. The UART baud rate generator is configured
+#define F_CPU  14062500
+#define BAUD   115200
+
 // --------------------------------------------------------
 
 extern uint32_t flashio_worker_begin;
@@ -232,7 +236,7 @@ char getchar_prompt(char *prompt)
 	while (c == -1) {
 		__asm__ volatile ("rdcycle %0" : "=r"(cycles_now));
 		cycles = cycles_now - cycles_begin;
-		if (cycles > 12000000) {
+		if (cycles > F_CPU) {
 			if (prompt)
 				print(prompt);
 			cycles_begin = cycles_now;
@@ -666,7 +670,7 @@ void cmd_echo()
 void main()
 {
 	reg_leds = 31;
-	reg_uart_clkdiv = 104;
+	reg_uart_clkdiv = F_CPU / BAUD;
 	print("Booting..\n");
 
 	reg_leds = 63;
