@@ -9,9 +9,8 @@
 #  error "Set -DICEBREAKER or -DHX8KDEMO when compiling firmware.c"
 #endif
 
-// System clock after the PLL (icepll -i 12 -o 16 -> 12 * 85 / 64).
-// T = 1 / F_CPU = 62.745 ns. Derive baud and timing from this one value.
-#define F_CPU 15937500
+// System clock after the PLL and CLK_Divider (icepll -i 12 -o 28 and divided by 2).
+#define F_CPU 14062500
 #define BAUD  115200
 
 // a pointer to this is a null pointer, but the compiler does not
