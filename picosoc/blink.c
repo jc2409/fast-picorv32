@@ -209,7 +209,6 @@ void main()
 {
 	setup_picosoc();
 
-	print("\nGB3 RISC-V @ 15.9375 MHz\n");
 	run_benchmark();
 
 	while (1){
