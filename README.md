@@ -1,5 +1,187 @@
 [![.github/workflows/ci.yml](https://github.com/YosysHQ/picorv32/actions/workflows/ci.yml/badge.svg)](https://github.com/YosysHQ/picorv32/actions/workflows/ci.yml)
 
+Compact Restoring Divider (area reduction)
+==========================================
+
+The `picorv32_pcpi_div` module (the optional `ENABLE_DIV` hardware divider) was
+rewritten into a more compact restoring divider. It computes the exact same
+RV32M results — `div` / `divu` / `rem` / `remu`, including div-by-zero and the
+`INT_MIN / -1` overflow case — in the same ~33 cycles, but uses noticeably less
+FPGA/ASIC area.
+
+**Where the area comes from in the old version**
+
+The stock divider held the divisor *pre-shifted left by 31 bits* in a 63-bit
+register and shifted it right one place per iteration, while walking a 32-bit
+one-hot mask to pick off quotient bits. Each cycle it compared and subtracted
+across the full 63-bit divisor. It also kept the dividend and quotient in two
+separate 32-bit registers.
+
+```
+reg [31:0] dividend;      // 32 FF
+reg [62:0] divisor;       // 63 FF  (pre-shifted, shifts right each cycle)
+reg [31:0] quotient;      // 32 FF
+reg [31:0] quotient_msk;  // 32 FF  (one-hot iteration mask)
+reg        running, outsign;          // 2 FF
+                          // ≈ 159 FF, 63-bit subtract/compare datapath
+```
+
+**What the new compact version does**
+
+Instead, the divisor stays a fixed 32-bit value and the *partial remainder is
+shifted left* one bit per step, pulling in the next dividend bit from the top.
+The dividend and quotient share a single 32-bit register (`dq`): the dividend
+bits shift out the top as quotient bits shift in the bottom. A small 6-bit step
+counter replaces the 32-bit one-hot mask.
+
+```
+reg [31:0] divisor_q;     // 32 FF  (held fixed, no shifting)
+reg [32:0] rem_q;         // 33 FF  (running remainder, +1 bit for the shift)
+reg [31:0] dq;            // 32 FF  (dividend out the top, quotient in the bottom)
+reg [5:0]  step;          //  6 FF  (binary step counter, not a one-hot mask)
+reg        running, outsign;          // 2 FF
+                          // ≈ 104 FF, 33-bit subtract datapath
+```
+
+**Net effect**
+
+| | Stock divider | Compact divider |
+| --- | ---: | ---: |
+| Divisor register | 63 bits (pre-shifted) | 32 bits (fixed) |
+| Dividend + quotient | 2 × 32-bit registers | 1 shared 32-bit register |
+| Iteration counter | 32-bit one-hot mask | 6-bit binary counter |
+| Subtract / compare width | 63-bit | 33-bit |
+| Total flip-flops | ≈ 159 FF | ≈ 104 FF (~35% fewer) |
+| Latency | ~33 cycles | ~33 cycles (unchanged) |
+
+The roughly 55 fewer flip-flops come mostly from dropping the 31 extra divisor
+bits, merging dividend and quotient into one register, and replacing the
+one-hot mask with a counter. Shrinking the subtractor from 63 to 33 bits also
+cuts the combinational logic (LUTs / carry chain) on the critical datapath.
+
+**Measured iCE40 (UP5K) area impact**
+
+Building the full picosoc both ways — *no cache, barrel shifter on, divider on,
+fast multiplier on, compressed ISA off* — gives:
+
+| Build | `ICESTORM_LC` used | Utilization (of 5280) |
+| --- | ---: | ---: |
+| Stock divider  | 4754 | 90% |
+| Compact divider | 4589 | 86% |
+
+That is **165 LCs saved (~3.1% of the device)**. It is tempting to expect the
+saving to match the ~55-flip-flop figure above, but on iCE40 each
+`ICESTORM_LC` bundles one LUT4 *and* one flip-flop, so the LC delta also picks
+up the combinational logic the FF count never captures:
+
+| Source | What is removed | ≈ LCs |
+| --- | --- | ---: |
+| Merged dividend + quotient | 2 × 32-bit regs → 1 × 32-bit (`dq`) | ~32 |
+| One-hot mask → counter | 32-bit `quotient_msk` shift-reg → 6-bit `step` | ~24 |
+| Divisor 63 → 32 bit | drops 31 register bits + their feeder LUTs | ~31 |
+| Subtract/compare 63 → 33 bit | narrower carry chain (combinational only) | ~30 |
+| Misc control/mux logic freed | | remainder |
+
+So roughly half the win is registers-with-their-feeder-LUTs and the other half
+is combinational logic (mainly collapsing the 63-bit comparator/subtractor to
+33 bits and removing the 32-bit one-hot shift register) — which is why the LC
+saving lands near ~3× the raw flip-flop count rather than ~1×. The result is in
+the expected range, if anything slightly on the better end. Going from 90% to
+86% utilization on a nearly-full UP5K is exactly the headroom that helps
+place-and-route close timing at the 16.5 MHz target (and leaves room for the
+cache).
+
+Caveat: synthesis numbers swing with yosys/nextpnr version, seed, and `abc`
+options, so treat ±10–20 LCs as noise. For an apples-to-apples comparison,
+synthesize both dividers with the same seed and `--freq`.
+
+Note: this rewrite removed the `RISCV_FORMAL_ALTOPS` shortcut path that the
+original divider carried for riscv-formal runs; functional RV32M behaviour is
+unchanged.
+
+Overclocking with the on-chip PLL
+=================================
+
+The iCEBreaker board only has a **12 MHz crystal**, but the picosoc runs faster
+than that by routing the crystal through the iCE40 **`SB_PLL40_PAD`** hard PLL
+before it ever reaches the SoC. The PLL multiplies the 12 MHz input up to the
+target SoC clock, and that output is named `clk` — every downstream block
+(reset logic, 7-segment driver, GPIO, `picosoc`) keeps using `clk` unchanged,
+so the PLL is inserted *transparently* between the pad and the core. (The raw
+pin must stay a separate net, `clk_in`, because `SB_PLL40_PAD` consumes the pad
+and produces the fabric clock as its output.)
+
+**How the PLL frequency is set** (`picosoc/icebreaker.v`):
+
+```verilog
+SB_PLL40_PAD #(
+    .FEEDBACK_PATH("SIMPLE"),
+    .DIVR(4'd0),        // DIVR = 0
+    .DIVF(7'b1010111),  // DIVF = 87
+    .DIVQ(3'b110),      // DIVQ = 6
+    .FILTER_RANGE(3'b001)
+) pll ( .PACKAGEPIN(clk_in), .PLLOUTCORE(pll_clk), .LOCK(pll_locked), ... );
+```
+
+The output frequency follows the iCE40 PLL equation:
+
+```
+F_out = F_in * (DIVF + 1) / ( 2^DIVQ * (DIVR + 1) )
+      = 12 MHz * (87 + 1) / ( 2^6 * (0 + 1) )
+      = 12 MHz * 88 / 64
+      = 16.5 MHz          (VCO = 12 * 88 = 1056 MHz, then /64)
+```
+
+You never compute these dividers by hand — generate them with the icestorm
+tool and copy the values in:
+
+```
+icepll -i 12 -o 16.5      # -i input MHz, -o desired output MHz
+```
+
+There is also an optional **/2 clock divider** gated by the
+`USE_CLK_DIVIDER` parameter. When set to 1, a toggle flip-flop halves `pll_clk`
+before the global buffer, so you can run the PLL at a frequency the fabric can
+lock cleanly and still feed the SoC half of it. Both paths drive `clk` through
+an `SB_GB` global-buffer so the clock reaches the whole fabric.
+
+`resetn` is held until both the reset counter saturates **and** `pll_locked`
+is high, so the SoC only comes out of reset once the PLL has locked.
+
+What to update to adopt a new clock frequency
+---------------------------------------------
+
+Changing the SoC clock is not just a one-line edit — the frequency leaks into
+firmware timing and into the place-and-route timing constraints. To move to a
+new frequency, update **all** of these so they agree:
+
+1. **PLL dividers** in `picosoc/icebreaker.v` — run `icepll -i 12 -o <MHz>` and
+   paste the reported `DIVR` / `DIVF` / `DIVQ` (and `FILTER_RANGE`) into the
+   `SB_PLL40_PAD` instance.
+2. **`USE_CLK_DIVIDER`** in `picosoc/icebreaker.v` — set to `1` if you want the
+   SoC to run at half the PLL output (remember to halve the effective frequency
+   used in steps 3–5).
+3. **`F_CPU`** in `picosoc/blink.c` — this is the *actual SoC clock in Hz*. The
+   UART baud divider is derived from it (`reg_uart_clkdiv = F_CPU / BAUD`), so a
+   wrong `F_CPU` gives a garbled serial console.
+4. **`reg_uart_clkdiv`** in `picosoc/benchmark.c` — this firmware hard-codes the
+   divider (e.g. `143` for 12 MHz). Recompute it as `round(F_CPU / BAUD)` for
+   the new clock, or it will mis-baud.
+5. **Timing constraints** in `picosoc/Makefile` — update the `nextpnr-ice40
+   --freq <MHz>` target and the `icetime -c <MHz>` check so place-and-route
+   actually optimizes for, and verifies, the new clock.
+6. **Confirm timing closes** — after `make`, check the `icetime` / `nextpnr`
+   report shows a max frequency **at or above** your target. If it fails, either
+   back the frequency off, enable `USE_CLK_DIVIDER`, run the Makefile seed sweep
+   to find a better placement, or reduce the critical path (e.g. enable caching
+   / the compact divider above to shrink logic depth).
+
+> Heads-up: a few inline comments in `icebreaker.v` and `blink.c` still quote
+> older targets (28.125 / 15.9375 / 14.0625 MHz) from earlier overclock
+> experiments. The values that actually take effect are the `SB_PLL40_PAD`
+> dividers and the `F_CPU` macro, **not** the prose comments — trust the
+> numbers above (16.5 MHz with the dividers as currently committed).
+
 Cache Experimentation and Changes
 ======================================
 
