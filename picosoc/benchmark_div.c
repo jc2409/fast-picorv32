@@ -141,7 +141,7 @@ void print_dec(uint32_t v){ // works up to 999 only
 }
 
 void setup_picosoc(void){
-	reg_uart_clkdiv = 143; // Baud ~= 115200 for 12 MHz
+	reg_uart_clkdiv = 130; // Baud ~= 115200 for 12 MHz
 	reg_7seg = 0x02;       // represents Demo 02
 	reg_leds = 0x00;
 	set_flash_qspi_flag();
@@ -296,13 +296,12 @@ uint32_t bench_baseline(uint32_t seed){
 	return acc;
 }
 
-void run_div_benchmark(void){
+unsigned char run_div_benchmark(void){
 	uint32_t c0, c1, i0, i1;
-	volatile uint32_t sink;
 
 	__asm__ volatile ("rdcycle %0"   : "=r"(c0));
 	__asm__ volatile ("rdinstret %0" : "=r"(i0));
-	sink = bench_div(0xC0FFEE13);
+	uint32_t div_result = bench_div(0xC0FFEE13);
 	__asm__ volatile ("rdcycle %0"   : "=r"(c1));
 	__asm__ volatile ("rdinstret %0" : "=r"(i1));
 	uint32_t cyc_div = c1 - c0;
@@ -310,20 +309,32 @@ void run_div_benchmark(void){
 
 	__asm__ volatile ("rdcycle %0"   : "=r"(c0));
 	__asm__ volatile ("rdinstret %0" : "=r"(i0));
-	sink = bench_baseline(0xC0FFEE13);
+	uint32_t base_result = bench_baseline(0xC0FFEE13);
 	__asm__ volatile ("rdcycle %0"   : "=r"(c1));
 	__asm__ volatile ("rdinstret %0" : "=r"(i1));
 	uint32_t cyc_base = c1 - c0;
-	(void)sink;
+
+	// Keep bench_baseline's result live so the loop is not optimised away.
+	__asm__ volatile ("" :: "r"(base_result));
 
 	uint32_t ndivs = 4u * NDIV;
 	uint32_t net   = cyc_div - cyc_base;   // cycles attributable to the divides
 
-	print("DIV  cycles: 0x"); print_hex(cyc_div, 8);  putchar('\n');
-	print("DIV  instns: 0x"); print_hex(ins_div, 8);  putchar('\n');
-	print("Base cycles: 0x"); print_hex(cyc_base, 8); putchar('\n');
-	print("Net  cycles: 0x"); print_hex(net, 8);      putchar('\n');
-	print("Cyc/divide:  ");   print_dec(net / ndivs); putchar('\n');
+	// Fold the 32-bit divide checksum down to a byte for the 7-seg display,
+	// exactly like Kevin's run_workload() does for the MUL benchmark.
+	uint32_t folded = div_result;
+	folded ^= folded >> 16;
+	folded ^= folded >> 8;
+
+	print("DIV  result: 0x"); print_hex(div_result, 8);             putchar('\n');
+	print("7seg  byte:  0x"); print_hex((unsigned char)folded, 2);  putchar('\n');
+	print("DIV  cycles: 0x"); print_hex(cyc_div, 8);                putchar('\n');
+	print("DIV  instns: 0x"); print_hex(ins_div, 8);                putchar('\n');
+	print("Base cycles: 0x"); print_hex(cyc_base, 8);               putchar('\n');
+	print("Net  cycles: 0x"); print_hex(net, 8);                    putchar('\n');
+	print("Cyc/divide:  ");   print_dec(net / ndivs);               putchar('\n');
+
+	return (unsigned char)folded;
 }
 
 void main(){
@@ -341,10 +352,12 @@ void main(){
 	// }
 	// ----------------------------------------------------------------------
 
-	// Divider benchmark: run once and report cycles, then idle-blink.
-	run_div_benchmark();
+	// Divider benchmark: run once, report cycles, and keep the folded
+	// division checksum to drive the 7-seg display (like Kevin's benchmark).
+	unsigned char div_byte = run_div_benchmark();
 
 	while (1) {
+		reg_7seg = div_byte;            // show division result on the 7-seg
 		reg_leds = leds_value;
 		leds_value = leds_value ^ 0x02; // toggle LED1
 	}
