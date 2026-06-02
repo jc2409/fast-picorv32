@@ -1,5 +1,22 @@
 [![.github/workflows/ci.yml](https://github.com/YosysHQ/picorv32/actions/workflows/ci.yml/badge.svg)](https://github.com/YosysHQ/picorv32/actions/workflows/ci.yml)
 
+Latest Cache + Data Memory Lookahead Buffer Benchmark Data
+==========================================================
+
+<img width="770" height="353" alt="image" src="https://github.com/user-attachments/assets/37c2ca74-cc6b-417a-adf2-5db292018b0a" />
+
+Added a data memory lookahead buffer using the picorv32 lookahead interface
+so data memory reads take 0 cycles instead of 1. Reduces 1 CPI for each lw 
+instruction. Hence, e.g. in the integral benchmark 10/27 instructions in
+the hot loop are lw, matching closely with 0.37 CPI savings measured in 
+benchmark. 
+
+Similar to the icache, its a transparent interface instantiated in
+picosoc.v. 
+
+More documentation coming soon... 
+
+
 Compact Restoring Divider (area reduction)
 ==========================================
 
