@@ -55,10 +55,10 @@ icebsim: icebreaker_tb.vvp icebreaker_fw.hex
 icebsynsim: icebreaker_syn_tb.vvp icebreaker_fw.hex
 	vvp -N $< +firmware=icebreaker_fw.hex
 
-icebreaker.json: icebreaker.v ice40up5k_spram.v spimemio.v simpleuart.v icache.v picosoc.v ../picorv32.v
+icebreaker.json: icebreaker.v ice40up5k_spram.v spimemio.v simpleuart.v icache.v dmem_lookahead_buffer.v picosoc.v ../picorv32.v
 	yosys -ql icebreaker.log -p 'synth_ice40 -dsp -top icebreaker -json icebreaker.json' $^
 
-icebreaker_tb.vvp: icebreaker_tb.v icebreaker.v ice40up5k_spram.v spimemio.v simpleuart.v icache.v picosoc.v ../picorv32.v spiflash.v
+icebreaker_tb.vvp: icebreaker_tb.v icebreaker.v ice40up5k_spram.v spimemio.v simpleuart.v icache.v dmem_lookahead_buffer.v picosoc.v ../picorv32.v spiflash.v
 	iverilog -g2012 -DNO_ICE40_DEFAULT_ASSIGNMENTS -s testbench -o $@ $^ `yosys-config --datdir`/ice40/cells_sim.v
 
 icebreaker_syn_tb.vvp: icebreaker_tb.v icebreaker_syn.v spiflash.v
@@ -68,10 +68,10 @@ icebreaker_syn.v: icebreaker.json
 	yosys -p 'read_json icebreaker.json; write_verilog icebreaker_syn.v'
 
 icebreaker.asc: icebreaker.pcf icebreaker.json
-	nextpnr-ice40 --freq 16.5 --up5k --package sg48 --asc icebreaker.asc --pcf icebreaker.pcf --json icebreaker.json
+	nextpnr-ice40 --freq 16 --seed 60 --up5k --package sg48 --asc icebreaker.asc --pcf icebreaker.pcf --json icebreaker.json
 
 icebreaker.bin: icebreaker.asc
-	icetime -d up5k -c 16.5 -mtr icebreaker.rpt icebreaker.asc
+	icetime -d up5k -c 16 -mtr icebreaker.rpt icebreaker.asc
 	icepack icebreaker.asc icebreaker.bin
 
 # Try many nextpnr seeds and report the best icetime result
@@ -111,8 +111,8 @@ icebprog: icebreaker.bin icebreaker_fw.bin
 	iceprog icebreaker.bin
 	iceprog -o 1M icebreaker_fw.bin
 
-icebreaker_benchmark.elf: icebreaker_sections.lds start.s benchmark.c
-	$(CROSS)gcc $(CFLAGS) -DICEBREAKER -mabi=ilp32 -march=rv32im -Wl,-Bstatic,-T,icebreaker_sections.lds,--strip-debug -ffreestanding -nostdlib -o $@ start.s benchmark.c
+icebreaker_benchmark.elf: icebreaker_sections.lds start.s bubble.c
+	$(CROSS)gcc $(CFLAGS) -DICEBREAKER -mabi=ilp32 -march=rv32im -Wl,-Bstatic,-T,icebreaker_sections.lds,--strip-debug -ffreestanding -nostdlib -o $@ start.s bubble.c
 
 icebreaker_benchmark.bin: icebreaker_benchmark.elf
 	$(CROSS)objcopy -O binary $< $@
@@ -172,7 +172,7 @@ clean:
 	rm -f hx8kdemo_syn.v hx8kdemo_syn_tb.vvp hx8kdemo_tb.vvp
 	rm -f icebreaker.json icebreaker.log icebreaker.asc icebreaker.rpt icebreaker.bin
 	rm -f icebreaker_syn.v icebreaker_syn_tb.vvp icebreaker_tb.vvp
-	rm -f icebreaker_blink.elf icebreaker_blink.bin
+	rm -f icebreaker_blink.elf icebreaker_blink.bin icebreaker_benchmark.elf icebreaker_benchmark.bin 
 
 .PHONY: spiflash_tb clean
 .PHONY: hx8kprog hx8kprog_fw hx8ksim hx8ksynsim

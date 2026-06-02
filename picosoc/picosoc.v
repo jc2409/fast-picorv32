@@ -79,7 +79,8 @@ module picosoc (
 	parameter [0:0] ENABLE_COUNTERS = 1;
 	parameter [0:0] ENABLE_IRQ_QREGS = 0;
 
-	parameter [0:0] ENABLE_ICACHE = 1; // NEW
+	parameter [0:0] ENABLE_ICACHE = 1;
+	parameter [0:0] ENABLE_DMEM_LOOKAHEAD = 1;
 
 	parameter integer MEM_WORDS = 256;
 	parameter [31:0] STACKADDR = (4*MEM_WORDS);       // end of memory
@@ -99,7 +100,9 @@ module picosoc (
 		irq[7] = irq_7;
 	end
 
-	// Memory system-facing memory interface (same as before)
+	// Data flows as cpu_mem_* --> icache --> intermediate_mem_* -> dmem lookahead buffer -> memory system
+
+	// Memory system-facing memory interface
 	wire mem_valid;
 	wire mem_instr;
 	wire mem_ready;
@@ -107,6 +110,15 @@ module picosoc (
 	wire [31:0] mem_wdata;
 	wire [3:0] mem_wstrb;
 	wire [31:0] mem_rdata;
+
+	// Intermediate memory interface: icache stage output -> dmem lookahead buffer input
+	wire intermediate_mem_valid;
+	wire intermediate_mem_instr;
+	wire intermediate_mem_ready;
+	wire [31:0] intermediate_mem_addr;
+	wire [31:0] intermediate_mem_wdata;
+	wire [3:0] intermediate_mem_wstrb;
+	wire [31:0] intermediate_mem_rdata;
 
 	// CPU-facing memory interface
 	wire cpu_mem_valid;
@@ -122,6 +134,15 @@ module picosoc (
 
 	reg ram_ready;
 	wire [31:0] ram_rdata;
+
+	// Data RAM lookahead extra outputs - See MUX section near bottom of file
+	// These outputs are MUXed with the regular passed-through
+	// mem_addr mem_rdata mem_valid signals 
+	// to directly control the data RAM interface, when we are 
+	// performing a lookahead read. 
+	wire ram_la_active;
+	wire [21:0] ram_la_addr;
+	wire dmem_la_hit;
 
 	assign iomem_valid = mem_valid && (mem_addr[31:24] > 8'h 01);
 	assign iomem_wstrb = mem_wstrb;
@@ -141,7 +162,8 @@ module picosoc (
 	assign mem_ready = (iomem_valid && iomem_ready) || spimem_ready || ram_ready || spimemio_cfgreg_sel ||
 			simpleuart_reg_div_sel || (simpleuart_reg_dat_sel && !simpleuart_reg_dat_wait);
 
-	assign mem_rdata = (iomem_valid && iomem_ready) ? iomem_rdata : spimem_ready ? spimem_rdata : ram_ready ? ram_rdata :
+	assign mem_rdata = (iomem_valid && iomem_ready) ? iomem_rdata : spimem_ready ? spimem_rdata :
+			(ram_ready || dmem_la_hit) ? ram_rdata :
 			spimemio_cfgreg_sel ? spimemio_cfgreg_do : simpleuart_reg_div_sel ? simpleuart_reg_div_do :
 			simpleuart_reg_dat_sel ? simpleuart_reg_dat_do : 32'h 0000_0000;
 
@@ -204,22 +226,68 @@ module picosoc (
 				.cpu_mem_la_read (cpu_mem_la_read),
 				.cpu_mem_la_addr  (cpu_mem_la_addr),
 
+				.mem_valid(intermediate_mem_valid),
+				.mem_instr(intermediate_mem_instr),
+				.mem_addr(intermediate_mem_addr),
+				.mem_wdata(intermediate_mem_wdata),
+				.mem_wstrb(intermediate_mem_wstrb),
+				.mem_ready(intermediate_mem_ready),
+				.mem_rdata(intermediate_mem_rdata)
+			);
+		end else begin : gen_no_icache
+			assign intermediate_mem_valid = cpu_mem_valid;
+			assign intermediate_mem_instr = cpu_mem_instr;
+			assign intermediate_mem_addr  = cpu_mem_addr;
+			assign intermediate_mem_wdata = cpu_mem_wdata;
+			assign intermediate_mem_wstrb = cpu_mem_wstrb;
+			assign cpu_mem_ready          = intermediate_mem_ready;
+			assign cpu_mem_rdata          = intermediate_mem_rdata;
+		end
+	endgenerate
+
+	generate
+		if (ENABLE_DMEM_LOOKAHEAD) begin : gen_dmem_lookahead
+			dmem_lookahead_buffer #(
+				.MEM_WORDS(MEM_WORDS)
+			) dmem_lookahead_buffer_inst (
+				.clk(clk),
+				.resetn(resetn),
+
+				.cpu_mem_valid(intermediate_mem_valid),
+				.cpu_mem_instr(intermediate_mem_instr),
+				.cpu_mem_addr(intermediate_mem_addr),
+				.cpu_mem_wdata(intermediate_mem_wdata),
+				.cpu_mem_wstrb(intermediate_mem_wstrb),
+				.cpu_mem_ready(intermediate_mem_ready),
+				.cpu_mem_rdata(intermediate_mem_rdata),
+
+				.cpu_mem_la_read(cpu_mem_la_read),
+				.cpu_mem_la_addr(cpu_mem_la_addr),
+
 				.mem_valid(mem_valid),
 				.mem_instr(mem_instr),
 				.mem_addr(mem_addr),
 				.mem_wdata(mem_wdata),
 				.mem_wstrb(mem_wstrb),
 				.mem_ready(mem_ready),
-				.mem_rdata(mem_rdata)
+				.mem_rdata(mem_rdata),
+
+				.ram_la_active(ram_la_active),
+				.ram_la_addr(ram_la_addr),
+				.dmem_la_hit(dmem_la_hit)
 			);
-		end else begin : gen_no_icache
-			assign mem_valid      = cpu_mem_valid;
-			assign mem_instr      = cpu_mem_instr;
-			assign mem_addr       = cpu_mem_addr;
-			assign mem_wdata      = cpu_mem_wdata;
-			assign mem_wstrb      = cpu_mem_wstrb;
-			assign cpu_mem_ready  = mem_ready;
-			assign cpu_mem_rdata  = mem_rdata;
+		end else begin : gen_no_dmem_lookahead
+			assign mem_valid              = intermediate_mem_valid;
+			assign mem_instr              = intermediate_mem_instr;
+			assign mem_addr               = intermediate_mem_addr;
+			assign mem_wdata              = intermediate_mem_wdata;
+			assign mem_wstrb              = intermediate_mem_wstrb;
+			assign intermediate_mem_ready = mem_ready;
+			assign intermediate_mem_rdata = mem_rdata;
+
+			assign ram_la_active = 1'b0;
+			assign ram_la_addr   = 22'b0;
+			assign dmem_la_hit   = 1'b0;
 		end
 	endgenerate
  
@@ -276,12 +344,23 @@ module picosoc (
 	always @(posedge clk)
 		ram_ready <= mem_valid && !mem_ready && mem_addr < 4*MEM_WORDS;
 
+	// NEW:
+	// RAM MUX between dmem_lookahead_buffer and picosoc memory interface
+	// If we aren't doing a real_ram_access, and the ram_la_active signal
+	// is asserted by the dmem_lookahead_buffer, then we can read 
+	// from ram so it's ready to get sent back with no delay when 
+	// the CPU requests it.
+	wire real_ram_access = mem_valid && mem_addr < 4*MEM_WORDS;
+
+	wire [21:0] ram_word_addr =
+		(ram_la_active && !real_ram_access) ? ram_la_addr : mem_addr[23:2];
+
 	`PICOSOC_MEM #(
 		.WORDS(MEM_WORDS)
 	) memory (
 		.clk(clk),
 		.wen((mem_valid && !mem_ready && mem_addr < 4*MEM_WORDS) ? mem_wstrb : 4'b0),
-		.addr(mem_addr[23:2]),
+		.addr(ram_word_addr),
 		.wdata(mem_wdata),
 		.rdata(ram_rdata)
 	);

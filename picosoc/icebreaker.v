@@ -62,9 +62,9 @@ module icebreaker (
 	wire pll_locked;
 	SB_PLL40_PAD #(
 		.FEEDBACK_PATH("SIMPLE"),
-		.DIVR(4'd0),       // DIVR = 0
-		.DIVF(7'b1010111),    // DIVF = 87  
-		.DIVQ(3'b110),        // DIVQ = 6
+		.DIVR(4'd0),       
+		.DIVF(7'd87),     //16.5 MHz
+		.DIVQ(3'd6),       
 		.FILTER_RANGE(3'b001)
 	) pll (
 		.PACKAGEPIN  (clk_in),

@@ -141,7 +141,7 @@ void print_dec(uint32_t v){ // works up to 999 only
 }
 
 void setup_picosoc(void){
-	reg_uart_clkdiv = 104; // Baud = 1152060
+	reg_uart_clkdiv = 143; // Baud = 1152060
     reg_7seg = 0x02;       // represents Demo 02
 	reg_leds = 0x00;
 	set_flash_qspi_flag();
