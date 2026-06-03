@@ -187,6 +187,7 @@ clean:
 		firmware/firmware.elf firmware/firmware.bin firmware/firmware.hex firmware/firmware.map \
 		testbench.vvp testbench_sp.vvp testbench_synth.vvp testbench_ez.vvp \
 		testbench_rvf.vvp testbench_wb.vvp testbench.vcd testbench.trace \
-		testbench_verilator testbench_verilator_dir
+		testbench_verilator testbench_verilator_dir \
+		div_tb.vvp
 
 .PHONY: test div_test test_vcd test_sp test_axi test_wb test_wb_vcd test_ez test_ez_vcd test_synth download-tools build-tools toc clean
