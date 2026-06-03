@@ -36,3 +36,4 @@
 /synth.v
 .*.swp
 .DS_Store
+picosoc/build_fixed/
