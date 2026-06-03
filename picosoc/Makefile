@@ -1,4 +1,5 @@
-CROSS=riscv32-unknown-elf-
+CROSS=riscv32-unknown-elf- #default
+#CROSS=/opt/homebrew/opt/riscv-gnu-toolchain/bin/riscv64-unknown-elf- 
 CFLAGS=
 
 # ---- iCE40 HX8K Breakout Board ----
@@ -162,9 +163,25 @@ spiflash_tb.vvp: spiflash.v spiflash_tb.v
 cmos.log: spimemio.v simpleuart.v picosoc.v ../picorv32.v
 	yosys -l cmos.log -p 'synth -top picosoc; abc -g cmos2; opt -fast; stat' $^
 
+# ---- I-cache unit testbench (self-checking) ----
+# tb_dm   drives icache_multiword_lookahead       (direct-mapped)
+# tb_2way drives icache_multiword_lookahead_2way  (2-way, LRU)
+# `make icache_test` runs both; each prints "ALL TESTS PASSED" on success.
+
+icache_tb_dm.vvp: icache_tb.v icache.v
+	iverilog -g2012 -o $@ -s tb_dm $^
+
+icache_tb_2way.vvp: icache_tb.v icache.v
+	iverilog -g2012 -o $@ -s tb_2way $^
+
+icache_test: icache_tb_dm.vvp icache_tb_2way.vvp
+	vvp -N icache_tb_dm.vvp
+	vvp -N icache_tb_2way.vvp
+
 # ---- Clean ----
 
 clean:
+	rm -f icache_tb_dm.vvp icache_tb_2way.vvp icache_tb.vcd
 	rm -f testbench.vvp testbench.vcd spiflash_tb.vvp spiflash_tb.vcd
 	rm -f hx8kdemo_fw.elf hx8kdemo_fw.hex hx8kdemo_fw.bin cmos.log
 	rm -f icebreaker_fw.elf icebreaker_fw.hex icebreaker_fw.bin
@@ -174,7 +191,7 @@ clean:
 	rm -f icebreaker_syn.v icebreaker_syn_tb.vvp icebreaker_tb.vvp
 	rm -f icebreaker_blink.elf icebreaker_blink.bin icebreaker_benchmark.elf icebreaker_benchmark.bin 
 
-.PHONY: spiflash_tb clean
+.PHONY: spiflash_tb clean icache_test
 .PHONY: hx8kprog hx8kprog_fw hx8ksim hx8ksynsim
 .PHONY: icebprog icebprog_fw icebsim icebsynsim
 .PHONY: icebreaker_seed_sweep
