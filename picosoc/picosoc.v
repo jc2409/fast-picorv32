@@ -182,7 +182,7 @@ module picosoc (
 		.ENABLE_MUL(ENABLE_MUL),
 		.ENABLE_DIV(ENABLE_DIV),
 		.ENABLE_FAST_MUL(ENABLE_FAST_MUL),
-		.ENABLE_IRQ(1),
+		.ENABLE_IRQ(0),
 		.ENABLE_IRQ_QREGS(ENABLE_IRQ_QREGS)
 	) cpu (
 		.clk         (clk        ),
@@ -207,9 +207,9 @@ module picosoc (
 		
 	generate
 		if (ENABLE_ICACHE) begin : gen_icache
-			icache_multiword_lookahead #(
-				.LINES(128),
-				.WORDS_PER_LINE(16)
+			icache_multiword_lookahead_2way #(
+				.LINES(64),
+				.WORDS_PER_LINE(16),
 			) icache_inst (
 				.clk(clk),
 				.resetn(resetn),
