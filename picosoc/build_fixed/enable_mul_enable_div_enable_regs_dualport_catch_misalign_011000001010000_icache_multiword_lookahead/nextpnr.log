@@ -1,0 +1,468 @@
+COMMAND: nextpnr-ice40 --up5k --package sg48 --json design.json --pcf icebreaker.pcf --asc design.asc --pcf-allow-unconstrained
+
+STDOUT:
+
+
+STDERR:
+Info: constrained 'clk_in' to bel 'X12/Y31/io1'
+Info: constrained 'ser_rx' to bel 'X13/Y0/io1'
+Info: constrained 'ser_tx' to bel 'X15/Y0/io0'
+Info: constrained 'flash_clk' to bel 'X24/Y0/io0'
+Info: constrained 'flash_csb' to bel 'X24/Y0/io1'
+Info: constrained 'flash_io0' to bel 'X23/Y0/io0'
+Info: constrained 'flash_io1' to bel 'X23/Y0/io1'
+Info: constrained 'flash_io2' to bel 'X18/Y0/io0'
+Info: constrained 'flash_io3' to bel 'X19/Y0/io0'
+Info: constrained 'P1A1' to bel 'X9/Y0/io0'
+Info: constrained 'P1A2' to bel 'X8/Y0/io0'
+Info: constrained 'P1A3' to bel 'X6/Y0/io0'
+Info: constrained 'P1A4' to bel 'X7/Y0/io1'
+Info: constrained 'P1A7' to bel 'X9/Y0/io1'
+Info: constrained 'P1A8' to bel 'X7/Y0/io0'
+Info: constrained 'P1A9' to bel 'X5/Y0/io0'
+Info: constrained 'P1A10' to bel 'X6/Y0/io1'
+Info: constrained 'led1' to bel 'X18/Y31/io0'
+Info: constrained 'led2' to bel 'X18/Y31/io1'
+Info: constrained 'led3' to bel 'X19/Y31/io1'
+Info: constrained 'led4' to bel 'X19/Y31/io0'
+Info: constrained 'led5' to bel 'X18/Y0/io1'
+Info: constrained 'ledr_n' to bel 'X17/Y0/io0'
+Info: constrained 'ledg_n' to bel 'X13/Y31/io0'
+
+Info: Packing constants..
+Info: Packing IOs..
+Info: flash_io3 feeds SB_IO flash_io_buf[3], removing $nextpnr_iobuf flash_io3.
+Info: flash_io2 feeds SB_IO flash_io_buf[2], removing $nextpnr_iobuf flash_io2.
+Info: flash_io1 feeds SB_IO flash_io_buf[1], removing $nextpnr_iobuf flash_io1.
+Info: flash_io0 feeds SB_IO flash_io_buf[0], removing $nextpnr_iobuf flash_io0.
+Info: Packing LUT-FFs..
+Info:     3043 LCs used as LUT4 only
+Info:     1085 LCs used as LUT4 and DFF
+Info: Packing non-LUT FFs..
+Info:      600 LCs used as DFF only
+Info: Packing carries..
+Info:      107 LCs used as CARRY only
+Info: Packing indirect carry+LUT pairs...
+Info:       38 LUTs merged into carry LCs
+Info: Packing RAMs..
+Info: Placing PLLs..
+Info:   constrained PLL 'pll' to X12/Y31/pll_3
+Info: Packing special functions..
+Info: Packing PLLs..
+Info:   PLL 'pll' has LOCK output, need to pass all outputs via LUT
+Info:   constrained 'pll_locked_SB_LUT4_I0_LC' to X1/Y30/lc0
+Info: Promoting globals..
+Info: promoting iomem_ready_SB_LUT4_I3_O_SB_LUT4_I1_O_SB_LUT4_I3_4_O[2] [reset] (fanout 550)
+Info: promoting soc.cpu.genblk1.genblk1.pcpi_mul.mul_counter_SB_DFFE_Q_D_SB_LUT4_O_I3[0] [reset] (fanout 85)
+Info: promoting soc.cpu.genblk2.pcpi_div.dq_SB_DFFE_Q_10_D_SB_LUT4_O_I3[1] [reset] (fanout 38)
+Info: promoting soc.simpleuart.send_pattern_SB_DFFESS_Q_D_SB_LUT4_O_I3_SB_LUT4_I2_O [reset] (fanout 32)
+Info: promoting resetn [cen] (fanout 215)
+Info: promoting soc.gen_icache.icache_inst.state_SB_DFF_Q_1_D_SB_LUT4_O_I3_SB_LUT4_I3_1_O [cen] (fanout 128)
+Info: promoting soc.cpu.genblk2.pcpi_div.running_SB_DFFSR_Q_D_SB_LUT4_I3_O [cen] (fanout 70)
+Info: Constraining chains...
+Info:       51 LCs used to legalise carry chains.
+Info: Checksum: 0x9179b56b
+
+Info: Device utilisation:
+Info: 	         ICESTORM_LC:    4850/   5280    91%
+Info: 	        ICESTORM_RAM:      22/     30    73%
+Info: 	               SB_IO:      24/     96    25%
+Info: 	               SB_GB:       8/      8   100%
+Info: 	        ICESTORM_PLL:       1/      1   100%
+Info: 	         SB_WARMBOOT:       0/      1     0%
+Info: 	        ICESTORM_DSP:       0/      8     0%
+Info: 	      ICESTORM_HFOSC:       0/      1     0%
+Info: 	      ICESTORM_LFOSC:       0/      1     0%
+Info: 	              SB_I2C:       0/      2     0%
+Info: 	              SB_SPI:       0/      2     0%
+Info: 	              IO_I3C:       0/      2     0%
+Info: 	         SB_LEDDA_IP:       0/      1     0%
+Info: 	         SB_RGBA_DRV:       0/      1     0%
+Info: 	      ICESTORM_SPRAM:       4/      4   100%
+
+Info: Placed 26 cells based on constraints.
+Info: Creating initial analytic placement for 4177 cells, random placement wirelen = 121244.
+Info:     at initial placer iter 0, wirelen = 1988
+Info:     at initial placer iter 1, wirelen = 1878
+Info:     at initial placer iter 2, wirelen = 1981
+Info:     at initial placer iter 3, wirelen = 1977
+Info: Running main analytical placer, max placement attempts per cell = 3012285.
+Info:     at iteration #1, type ALL: wirelen solved = 1981, spread = 43562, legal = 49076; time = 0.14s
+Info:     at iteration #2, type ALL: wirelen solved = 2824, spread = 36331, legal = 43374; time = 0.13s
+Info:     at iteration #3, type ALL: wirelen solved = 4254, spread = 35097, legal = 41425; time = 0.14s
+Info:     at iteration #4, type ALL: wirelen solved = 5723, spread = 32760, legal = 38447; time = 0.13s
+Info:     at iteration #5, type ALL: wirelen solved = 7049, spread = 30588, legal = 36204; time = 0.13s
+Info:     at iteration #6, type ALL: wirelen solved = 8013, spread = 28625, legal = 35056; time = 0.13s
+Info:     at iteration #7, type ALL: wirelen solved = 9053, spread = 27092, legal = 34098; time = 0.12s
+Info:     at iteration #8, type ALL: wirelen solved = 9953, spread = 26590, legal = 33854; time = 0.13s
+Info:     at iteration #9, type ALL: wirelen solved = 10601, spread = 26093, legal = 32542; time = 0.12s
+Info:     at iteration #10, type ALL: wirelen solved = 11402, spread = 25907, legal = 32409; time = 0.12s
+Info:     at iteration #11, type ALL: wirelen solved = 12030, spread = 25043, legal = 31067; time = 0.14s
+Info:     at iteration #12, type ALL: wirelen solved = 12711, spread = 24805, legal = 30472; time = 0.12s
+Info:     at iteration #13, type ALL: wirelen solved = 13684, spread = 24371, legal = 30734; time = 0.12s
+Info:     at iteration #14, type ALL: wirelen solved = 14043, spread = 24087, legal = 31534; time = 0.12s
+Info:     at iteration #15, type ALL: wirelen solved = 14345, spread = 24263, legal = 30887; time = 0.11s
+Info:     at iteration #16, type ALL: wirelen solved = 14703, spread = 23919, legal = 30602; time = 0.12s
+Info:     at iteration #17, type ALL: wirelen solved = 15118, spread = 23899, legal = 29964; time = 0.12s
+Info:     at iteration #18, type ALL: wirelen solved = 15084, spread = 24124, legal = 30976; time = 0.12s
+Info:     at iteration #19, type ALL: wirelen solved = 15485, spread = 24386, legal = 31836; time = 0.12s
+Info:     at iteration #20, type ALL: wirelen solved = 15794, spread = 24195, legal = 30687; time = 0.17s
+Info:     at iteration #21, type ALL: wirelen solved = 16336, spread = 24155, legal = 30194; time = 0.11s
+Info:     at iteration #22, type ALL: wirelen solved = 15879, spread = 24243, legal = 31485; time = 0.14s
+Info: HeAP Placer Time: 3.65s
+Info:   of which solving equations: 1.59s
+Info:   of which spreading cells: 0.21s
+Info:   of which strict legalisation: 1.20s
+
+Info: Running simulated annealing placer for refinement.
+Info:   at iteration #1: temp = 0.000000, timing cost = 2204, wirelen = 29964
+Info:   at iteration #5: temp = 0.000000, timing cost = 1599, wirelen = 25774
+Info:   at iteration #10: temp = 0.000000, timing cost = 1766, wirelen = 24609
+Info:   at iteration #15: temp = 0.000000, timing cost = 1719, wirelen = 23879
+Info:   at iteration #20: temp = 0.000000, timing cost = 1709, wirelen = 23524
+Info:   at iteration #25: temp = 0.000000, timing cost = 1708, wirelen = 23392
+Info:   at iteration #30: temp = 0.000000, timing cost = 1704, wirelen = 23324
+Info:   at iteration #33: temp = 0.000000, timing cost = 1704, wirelen = 23313 
+Info: SA placement time 5.98s
+
+Info: Max frequency for clock 'clk': 16.58 MHz (PASS at 12.00 MHz)
+
+Info: Max delay <async>     -> posedge clk: 38.34 ns
+Info: Max delay posedge clk -> <async>    : 17.68 ns
+Info: Max delay negedge clk -> <async>    : 9.77 ns
+
+Info: Slack histogram:
+Info:  legend: * represents 24 endpoint(s)
+Info:          + represents [1,24) endpoint(s)
+Info: [ 23006,  25873) |+
+Info: [ 25873,  28740) |**+
+Info: [ 28740,  31607) |*+
+Info: [ 31607,  34474) |****+
+Info: [ 34474,  37341) |*****+
+Info: [ 37341,  40208) |*+
+Info: [ 40208,  43075) |****+
+Info: [ 43075,  45942) |***+
+Info: [ 45942,  48809) |******+
+Info: [ 48809,  51676) |*****+
+Info: [ 51676,  54543) |*********+
+Info: [ 54543,  57410) |*****+
+Info: [ 57410,  60277) |*****+
+Info: [ 60277,  63144) |********+
+Info: [ 63144,  66011) |***************************+
+Info: [ 66011,  68878) |*************************************************+
+Info: [ 68878,  71745) |********************+
+Info: [ 71745,  74612) |*************************+
+Info: [ 74612,  77479) |**************************************+
+Info: [ 77479,  80346) |************************************************************ 
+Info: Checksum: 0x2be9d7b5
+
+Info: Routing..
+Info: Setting up routing queue.
+Info: Routing 16653 arcs.
+Info:            |   (re-)routed arcs  |   delta    | remaining|       time spent     |
+Info:    IterCnt |  w/ripup   wo/ripup |  w/r  wo/r |      arcs| batch(sec) total(sec)|
+Info:       1000 |       78        921 |   78   921 |     15746|       0.46       0.46|
+Info:       2000 |      153       1846 |   75   925 |     14845|       0.31       0.76|
+Info:       3000 |      362       2637 |  209   791 |     14145|       0.16       0.93|
+Info:       4000 |      660       3339 |  298   702 |     13492|       0.14       1.07|
+Info:       5000 |      980       4019 |  320   680 |     12865|       0.17       1.23|
+Info:       6000 |     1189       4810 |  209   791 |     12171|       0.19       1.42|
+Info:       7000 |     1464       5535 |  275   725 |     11574|       0.23       1.65|
+Info:       8000 |     1677       6273 |  213   738 |     10944|       0.22       1.87|
+Info:       9000 |     2083       6866 |  406   593 |     10590|       0.30       2.17|
+Info:      10000 |     2396       7553 |  313   687 |     10166|       0.30       2.47|
+Info:      11000 |     2715       8209 |  319   656 |      9726|       0.32       2.78|
+Info:      12000 |     3086       8787 |  371   578 |      9354|       0.30       3.09|
+Info:      13000 |     3496       9375 |  410   588 |      9041|       0.31       3.39|
+Info:      14000 |     3933       9910 |  437   535 |      8818|       0.31       3.70|
+Info:      15000 |     4428      10415 |  495   505 |      8610|       0.32       4.02|
+Info:      16000 |     4871      10945 |  443   530 |      8433|       0.31       4.33|
+Info:      17000 |     5358      11430 |  487   485 |      8208|       0.30       4.63|
+Info:      18000 |     5854      11909 |  496   479 |      8046|       0.35       4.98|
+Info:      19000 |     6413      12350 |  559   441 |      7956|       0.37       5.35|
+Info:      20000 |     6851      12887 |  438   537 |      7700|       0.36       5.71|
+Info:      21000 |     7338      13397 |  487   510 |      7561|       0.36       6.06|
+Info:      22000 |     7814      13895 |  476   498 |      7371|       0.33       6.39|
+Info:      23000 |     8350      14359 |  536   464 |      7181|       0.33       6.72|
+Info:      24000 |     8814      14847 |  464   488 |      6883|       0.30       7.02|
+Info:      25000 |     9229      15346 |  415   499 |      6534|       0.33       7.34|
+Info:      26000 |     9697      15878 |  468   532 |      6380|       0.33       7.67|
+Info:      27000 |    10217      16357 |  520   479 |      6258|       0.40       8.08|
+Info:      28000 |    10693      16875 |  476   518 |      6059|       0.37       8.45|
+Info:      29000 |    11261      17307 |  568   432 |      5988|       0.44       8.89|
+Info:      30000 |    11789      17779 |  528   472 |      5825|       0.36       9.26|
+Info:      31000 |    12263      18304 |  474   525 |      5631|       0.35       9.61|
+Info:      32000 |    12763      18779 |  500   475 |      5420|       0.33       9.95|
+Info:      33000 |    13227      19311 |  464   532 |      5164|       0.26      10.21|
+Info:      34000 |    13756      19778 |  529   467 |      4995|       0.38      10.59|
+Info:      35000 |    14265      20263 |  509   485 |      4814|       0.38      10.97|
+Info:      36000 |    14756      20769 |  491   506 |      4711|       0.34      11.31|
+Info:      37000 |    15272      21253 |  516   484 |      4569|       0.36      11.67|
+Info:      38000 |    15805      21717 |  533   464 |      4375|       0.32      11.99|
+Info:      39000 |    16346      22176 |  541   459 |      4200|       0.36      12.35|
+Info:      40000 |    16887      22635 |  541   459 |      4063|       0.38      12.73|
+Info:      41000 |    17436      23024 |  549   389 |      3855|       0.34      13.07|
+Info:      42000 |    17977      23480 |  541   456 |      3742|       0.44      13.51|
+Info:      43000 |    18538      23917 |  561   437 |      3647|       0.39      13.90|
+Info:      44000 |    19125      24327 |  587   410 |      3563|       0.45      14.35|
+Info:      45000 |    19730      24719 |  605   392 |      3554|       0.47      14.82|
+Info:      46000 |    20347      25102 |  617   383 |      3496|       0.44      15.26|
+Info:      47000 |    20874      25571 |  527   469 |      3332|       0.40      15.65|
+Info:      48000 |    21380      26062 |  506   491 |      3208|       0.42      16.07|
+Info:      49000 |    21955      26487 |  575   425 |      3131|       0.36      16.43|
+Info:      50000 |    22578      26864 |  623   377 |      3126|       0.43      16.85|
+Info:      51000 |    23105      27337 |  527   473 |      3046|       0.43      17.29|
+Info:      52000 |    23612      27830 |  507   493 |      2929|       0.46      17.74|
+Info:      53000 |    24167      28274 |  555   444 |      2837|       0.35      18.10|
+Info:      54000 |    24754      28687 |  587   413 |      2816|       0.57      18.67|
+Info:      55000 |    25300      29137 |  546   450 |      2696|       0.96      19.63|
+Info:      56000 |    25955      29482 |  655   345 |      2658|       0.53      20.16|
+Info:      57000 |    26537      29900 |  582   418 |      2570|       0.46      20.63|
+Info:      58000 |    27015      30420 |  478   520 |      2441|       0.44      21.06|
+Info:      59000 |    27546      30889 |  531   469 |      2376|       0.50      21.57|
+Info:      60000 |    28190      31242 |  644   353 |      2301|       0.41      21.97|
+Info:      61000 |    28724      31708 |  534   466 |      2206|       0.41      22.39|
+Info:      62000 |    29285      32147 |  561   439 |      2176|       0.50      22.89|
+Info:      63000 |    29878      32549 |  593   402 |      2047|       0.36      23.24|
+Info:      64000 |    30431      32987 |  553   438 |      1870|       0.32      23.56|
+Info:      65000 |    30976      33441 |  545   454 |      1698|       0.35      23.91|
+Info:      66000 |    31546      33864 |  570   423 |      1551|       0.37      24.28|
+Info:      67000 |    31837      34562 |  291   698 |       941|       0.17      24.45|
+Info:      68000 |    32126      35273 |  289   711 |       404|       0.42      24.87|
+Info:      68881 |    32467      35814 |  341   541 |         0|       0.68      25.55|
+Info: Routing complete.
+Info: Router1 time 25.55s
+Info: Checksum: 0x74b1c003
+
+Info: Critical path report for clock 'clk' (posedge -> posedge):
+Info:       type curr  total name
+Info:   clk-to-q  1.39  1.39 Source soc.cpu.mem_wstrb_SB_DFFE_Q_D_SB_LUT4_O_LC.O
+Info:    routing  3.06  4.45 Net iomem_wstrb[3] (21,23) -> (21,18)
+Info:                          Sink soc.spimemio.softreset_SB_DFFSS_Q_D_SB_LUT4_O_I2_SB_LUT4_O_LC.I0
+Info:                          Defined in:
+Info:                               picosoc.v:111.13-111.22
+Info:      logic  1.28  5.73 Source soc.spimemio.softreset_SB_DFFSS_Q_D_SB_LUT4_O_I2_SB_LUT4_O_LC.O
+Info:    routing  1.76  7.49 Net soc.spimemio.softreset_SB_DFFSS_Q_D_SB_LUT4_O_I2[3] (21,18) -> (21,17)
+Info:                          Sink soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_I2_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  8.37 Source soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_I2_SB_LUT4_O_LC.O
+Info:    routing  3.06  11.42 Net soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_I2[2] (21,17) -> (22,11)
+Info:                          Sink soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_I2_SB_LUT4_I3_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  12.30 Source soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_I2_SB_LUT4_I3_LC.O
+Info:    routing  1.76  14.06 Net soc.ram_ready_SB_LUT4_I0_1_O_SB_LUT4_O_1_I1_SB_LUT4_O_I2[1] (22,11) -> (23,11)
+Info:                          Sink soc.ram_ready_SB_LUT4_I0_I1_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  14.93 Source soc.ram_ready_SB_LUT4_I0_I1_SB_LUT4_O_LC.O
+Info:    routing  2.95  17.88 Net soc.ram_ready_SB_LUT4_I0_I1[0] (23,11) -> (21,10)
+Info:                          Sink soc.ram_ready_SB_LUT4_I0_I1_SB_LUT4_I0_LC.I0
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  1.28  19.17 Source soc.ram_ready_SB_LUT4_I0_I1_SB_LUT4_I0_LC.O
+Info:    routing  1.76  20.93 Net flash_csb_SB_LUT4_I0_O_SB_LUT4_O_1_I1[1] (21,10) -> (20,11)
+Info:                          Sink iomem_ready_SB_LUT4_I1_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  21.80 Source iomem_ready_SB_LUT4_I1_LC.O
+Info:    routing  1.76  23.56 Net flash_csb_SB_LUT4_I0_O_SB_LUT4_O_1_I1_SB_LUT4_O_I3_SB_LUT4_I3_1_O[3] (20,11) -> (21,10)
+Info:                          Sink soc.ram_ready_SB_LUT4_I0_1_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  24.44 Source soc.ram_ready_SB_LUT4_I0_1_LC.O
+Info:    routing  1.76  26.20 Net soc.ram_ready_SB_LUT4_I0_1_O[2] (21,10) -> (21,9)
+Info:                          Sink soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_I3_SB_LUT4_O_LC.I2
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  1.21  27.40 Source soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_I3_SB_LUT4_O_LC.O
+Info:    routing  3.60  31.00 Net soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_I3[2] (21,9) -> (21,17)
+Info:                          Sink soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  31.88 Source soc.cpu.mem_xfer_SB_LUT4_O_I3_SB_LUT4_O_LC.O
+Info:    routing  3.60  35.48 Net soc.cpu.mem_xfer_SB_LUT4_O_I3[2] (21,17) -> (17,23)
+Info:                          Sink soc.cpu.mem_xfer_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  36.35 Source soc.cpu.mem_xfer_SB_LUT4_O_LC.O
+Info:    routing  1.76  38.11 Net soc.cpu.mem_rdata_q_SB_DFFE_Q_10_D[1] (17,23) -> (16,24)
+Info:                          Sink soc.cpu.cpu_state_SB_DFF_Q_3_D_SB_LUT4_O_I2_SB_LUT4_O_I3_SB_LUT4_O_I2_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  38.99 Source soc.cpu.cpu_state_SB_DFF_Q_3_D_SB_LUT4_O_I2_SB_LUT4_O_I3_SB_LUT4_O_I2_SB_LUT4_O_LC.O
+Info:    routing  4.14  43.13 Net soc.cpu.cpu_state_SB_DFF_Q_3_D_SB_LUT4_O_I2_SB_LUT4_O_I3_SB_LUT4_O_I2[1] (16,24) -> (8,29)
+Info:                          Sink soc.cpu.mem_do_prefetch_SB_LUT4_I1_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  44.00 Source soc.cpu.mem_do_prefetch_SB_LUT4_I1_LC.O
+Info:    routing  1.76  45.76 Net soc.cpu.decoder_pseudo_trigger_SB_DFFSR_Q_R_SB_LUT4_O_I3[3] (8,29) -> (9,28)
+Info:                          Sink soc.cpu.latched_is_lb_SB_DFFESR_Q_E_SB_LUT4_O_I3_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  46.64 Source soc.cpu.latched_is_lb_SB_DFFESR_Q_E_SB_LUT4_O_I3_SB_LUT4_O_LC.O
+Info:    routing  1.76  48.40 Net soc.cpu.instr_sll_SB_LUT4_I1_O_SB_LUT4_I1_O[2] (9,28) -> (9,27)
+Info:                          Sink soc.cpu.instr_sll_SB_LUT4_I1_O_SB_LUT4_I1_O_SB_LUT4_I2_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  49.27 Source soc.cpu.instr_sll_SB_LUT4_I1_O_SB_LUT4_I1_O_SB_LUT4_I2_LC.O
+Info:    routing  2.99  52.27 Net soc.cpu.instr_sll_SB_LUT4_I1_O_SB_LUT4_I1_O_SB_LUT4_I2_O[2] (9,27) -> (9,16)
+Info:                          Sink soc.cpu.instr_sll_SB_LUT4_I1_O_SB_LUT4_I1_O_SB_LUT4_I2_O_SB_LUT4_I3_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  53.14 Source soc.cpu.instr_sll_SB_LUT4_I1_O_SB_LUT4_I1_O_SB_LUT4_I2_O_SB_LUT4_I3_LC.O
+Info:    routing  3.60  56.74 Net soc.cpu.instr_sll_SB_LUT4_I1_O_SB_LUT4_I1_O_SB_LUT4_I2_O_SB_LUT4_I3_O[3] (9,16) -> (4,23)
+Info:                          Sink soc.cpu.reg_op1_SB_DFFE_Q_E_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  57.61 Source soc.cpu.reg_op1_SB_DFFE_Q_E_SB_LUT4_O_LC.O
+Info:    routing  2.45  60.06 Net soc.cpu.reg_op1_SB_DFFE_Q_E (4,23) -> (3,23)
+Info:                          Sink soc.cpu.reg_op1_SB_DFFE_Q_D_SB_LUT4_O_LC.CEN
+Info:      setup  0.10  60.16 Source soc.cpu.reg_op1_SB_DFFE_Q_D_SB_LUT4_O_LC.CEN
+Info: 16.62 ns logic, 43.54 ns routing
+
+Info: Critical path report for cross-domain path '<async>' -> 'posedge clk':
+Info:       type curr  total name
+Info:     source  0.00  0.00 Source flash_io_buf[0].D_IN_0
+Info:    routing  3.70  3.70 Net flash_io0_di (23,0) -> (22,9)
+Info:                          Sink flash_io0_di_SB_LUT4_I0_LC.I0
+Info:                          Defined in:
+Info:                               picosoc.v:153.14-153.32
+Info:      logic  1.28  4.99 Source flash_io0_di_SB_LUT4_I0_LC.O
+Info:    routing  1.76  6.75 Net flash_io0_di_SB_LUT4_I0_O[0] (22,9) -> (21,10)
+Info:                          Sink flash_io0_di_SB_LUT4_I0_O_SB_LUT4_I0_LC.I0
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  1.28  8.03 Source flash_io0_di_SB_LUT4_I0_O_SB_LUT4_I0_LC.O
+Info:    routing  2.41  10.44 Net flash_io0_di_SB_LUT4_I0_O_SB_LUT4_I0_O[1] (21,10) -> (21,13)
+Info:                          Sink soc.gen_icache.icache_inst.miss_rdata_SB_DFFESR_Q_31_D_SB_LUT4_O_I1_SB_LUT4_O_2_LC.I1
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  1.23  11.67 Source soc.gen_icache.icache_inst.miss_rdata_SB_DFFESR_Q_31_D_SB_LUT4_O_I1_SB_LUT4_O_2_LC.O
+Info:    routing  1.76  13.44 Net soc.gen_icache.icache_inst.miss_rdata_SB_DFFESR_Q_31_D_SB_LUT4_O_I1[3] (21,13) -> (21,14)
+Info:                          Sink soc.gen_icache.icache_inst.data_array.0.0_RDATA_1_SB_LUT4_I0_O_SB_LUT4_O_1_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  14.31 Source soc.gen_icache.icache_inst.data_array.0.0_RDATA_1_SB_LUT4_I0_O_SB_LUT4_O_1_LC.O
+Info:    routing  1.76  16.07 Net soc.gen_icache.icache_inst.data_array.0.0_RDATA_1_SB_LUT4_I0_O[3] (21,14) -> (20,15)
+Info:                          Sink soc.cpu.mem_rdata_q_SB_DFFE_Q_31_D_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  16.94 Source soc.cpu.mem_rdata_q_SB_DFFE_Q_31_D_SB_LUT4_O_LC.O
+Info:    routing  3.60  20.54 Net soc.cpu.mem_rdata_q_SB_DFFE_Q_15_D[2] (20,15) -> (18,22)
+Info:                          Sink soc.cpu.mem_rdata_q_SB_DFFE_Q_31_D_SB_LUT4_I3_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  21.42 Source soc.cpu.mem_rdata_q_SB_DFFE_Q_31_D_SB_LUT4_I3_LC.O
+Info:    routing  1.76  23.18 Net soc.cpu.mem_rdata_q_SB_DFFE_Q_31_D_SB_LUT4_I3_O[3] (18,22) -> (17,23)
+Info:                          Sink soc.cpu.mem_rdata_q_SB_DFFE_Q_6_D_SB_LUT4_I3_O_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  24.05 Source soc.cpu.mem_rdata_q_SB_DFFE_Q_6_D_SB_LUT4_I3_O_SB_LUT4_O_LC.O
+Info:    routing  2.41  26.46 Net soc.cpu.mem_rdata_q_SB_DFFE_Q_6_D_SB_LUT4_I3_O[3] (17,23) -> (16,25)
+Info:                          Sink soc.cpu.mem_rdata_q_SB_DFFE_Q_5_D_SB_LUT4_I2_O_SB_LUT4_O_1_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  27.34 Source soc.cpu.mem_rdata_q_SB_DFFE_Q_5_D_SB_LUT4_I2_O_SB_LUT4_O_1_LC.O
+Info:    routing  2.41  29.75 Net soc.cpu.mem_rdata_q_SB_DFFE_Q_13_D_SB_LUT4_I3_O_SB_LUT4_O_1_I2[0] (16,25) -> (16,27)
+Info:                          Sink soc.cpu.mem_rdata_q_SB_DFFE_Q_13_D_SB_LUT4_I3_O_SB_LUT4_O_1_LC.I1
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  1.23  30.98 Source soc.cpu.mem_rdata_q_SB_DFFE_Q_13_D_SB_LUT4_I3_O_SB_LUT4_O_1_LC.O
+Info:    routing  1.76  32.74 Net soc.cpu.mem_rdata_q_SB_DFFE_Q_13_D_SB_LUT4_I3_O[2] (16,27) -> (15,26)
+Info:                          Sink soc.cpu.cpuregs.regs.1.0_RADDR_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  33.61 Source soc.cpu.cpuregs.regs.1.0_RADDR_SB_LUT4_O_LC.O
+Info:    routing  4.14  37.75 Net soc.cpu.cpuregs.regs.1.0_RADDR (15,26) -> (6,23)
+Info:                          Sink soc.cpu.cpuregs.regs.1.0_RAM.RADDR_3
+Info:      setup  0.10  37.85 Source soc.cpu.cpuregs.regs.1.0_RAM.RADDR_3
+Info: 10.37 ns logic, 27.48 ns routing
+
+Info: Critical path report for cross-domain path 'posedge clk' -> '<async>':
+Info:       type curr  total name
+Info:   clk-to-q  1.39  1.39 Source soc.spimemio.xfer.dummy_count_SB_DFFESR_Q_D_SB_LUT4_O_LC.O
+Info:    routing  1.76  3.15 Net soc.spimemio.xfer.dummy_count[3] (21,4) -> (21,3)
+Info:                          Sink soc.spimemio.din_valid_SB_LUT4_I2_O_SB_LUT4_O_LC.I0
+Info:                          Defined in:
+Info:                               spimemio.v:554.20-554.43
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/arith_map.v:62.5-70.4
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  1.28  4.43 Source soc.spimemio.din_valid_SB_LUT4_I2_O_SB_LUT4_O_LC.O
+Info:    routing  1.76  6.20 Net flash_io0_oe_SB_LUT4_O_I3[2] (21,3) -> (20,3)
+Info:                          Sink flash_io3_oe_SB_LUT4_O_I3_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  7.07 Source flash_io3_oe_SB_LUT4_O_I3_SB_LUT4_O_LC.O
+Info:    routing  1.76  8.83 Net flash_io3_oe_SB_LUT4_O_I3[3] (20,3) -> (20,2)
+Info:                          Sink soc.spimemio.xfer_io3_90_SB_DFFN_Q_D_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  9.70 Source soc.spimemio.xfer_io3_90_SB_DFFN_Q_D_SB_LUT4_O_LC.O
+Info:    routing  2.95  12.66 Net soc.spimemio.xfer_io3_90_SB_DFFN_Q_D[2] (20,2) -> (18,1)
+Info:                          Sink soc.spimemio.xfer_io3_90_SB_LUT4_I2_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  13.53 Source soc.spimemio.xfer_io3_90_SB_LUT4_I2_LC.O
+Info:    routing  1.76  15.29 Net flash_io3_do_SB_LUT4_O_I3[2] (18,1) -> (18,1)
+Info:                          Sink flash_io3_do_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  16.17 Source flash_io3_do_SB_LUT4_O_LC.O
+Info:    routing  1.76  17.93 Net flash_io3_do (18,1) -> (19,0)
+Info:                          Sink flash_io_buf[3].D_OUT_0
+Info:                          Defined in:
+Info:                               spimemio.v:39.9-39.21
+Info: 6.17 ns logic, 11.76 ns routing
+
+Info: Critical path report for cross-domain path 'negedge clk' -> '<async>':
+Info:       type curr  total name
+Info:   clk-to-q  1.39  1.39 Source soc.spimemio.xfer_io0_90_SB_DFFN_Q_DFFLC.O
+Info:    routing  1.76  3.15 Net soc.spimemio.xfer_io0_90 (20,1) -> (20,1)
+Info:                          Sink soc.spimemio.xfer_io0_90_SB_LUT4_I2_LC.I2
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  1.21  4.36 Source soc.spimemio.xfer_io0_90_SB_LUT4_I2_LC.O
+Info:    routing  1.76  6.12 Net flash_io0_do_SB_LUT4_O_I3[2] (20,1) -> (20,1)
+Info:                          Sink flash_io0_do_SB_LUT4_O_LC.I3
+Info:                          Defined in:
+Info:                               /home/ed667/oss-cad-suite/lib/../share/yosys/ice40/cells_map.v:6.21-6.22
+Info:      logic  0.87  6.99 Source flash_io0_do_SB_LUT4_O_LC.O
+Info:    routing  3.60  10.59 Net flash_io0_do (20,1) -> (23,0)
+Info:                          Sink flash_io_buf[0].D_OUT_0
+Info:                          Defined in:
+Info:                               spimemio.v:36.9-36.21
+Info: 3.47 ns logic, 7.12 ns routing
+
+Info: Max frequency for clock 'clk': 16.62 MHz (PASS at 12.00 MHz)
+
+Info: Max delay <async>     -> posedge clk: 37.85 ns
+Info: Max delay posedge clk -> <async>    : 17.93 ns
+Info: Max delay negedge clk -> <async>    : 10.59 ns
+
+Info: Slack histogram:
+Info:  legend: * represents 21 endpoint(s)
+Info:          + represents [1,21) endpoint(s)
+Info: [ 23171,  26017) |+
+Info: [ 26017,  28863) |**+
+Info: [ 28863,  31709) |**+
+Info: [ 31709,  34555) |**+
+Info: [ 34555,  37401) |***+
+Info: [ 37401,  40247) |**+
+Info: [ 40247,  43093) |********+
+Info: [ 43093,  45939) |*******+
+Info: [ 45939,  48785) |*********+
+Info: [ 48785,  51631) |*********+
+Info: [ 51631,  54477) |*******+
+Info: [ 54477,  57323) |****+
+Info: [ 57323,  60169) |******+
+Info: [ 60169,  63015) |***********+
+Info: [ 63015,  65861) |**************************+
+Info: [ 65861,  68707) |************************+
+Info: [ 68707,  71553) |***********************************************************+
+Info: [ 71553,  74399) |************************+
+Info: [ 74399,  77245) |***************************************************+
+Info: [ 77245,  80091) |************************************************************ 
+
+Info: Program finished normally.
