@@ -34,5 +34,36 @@
 /check.vcd
 /synth.log
 /synth.v
+
+# ---- root-level unit testbench artifacts ----
+/div_tb.vvp
+/div_tb.vcd
+
+# ---- picosoc/ build & simulation artifacts ----
+# Simulation
+/picosoc/*.vvp
+/picosoc/*.vcd
+/picosoc/*.gtkw
+/picosoc/icache_tb.vcd
+# Firmware / program images (generated from the .c/.s sources)
+/picosoc/*.elf
+/picosoc/*.bin
+/picosoc/*.hex
+# Synthesis / place-and-route outputs
+/picosoc/*.json
+/picosoc/*.log
+/picosoc/*.asc
+/picosoc/*.rpt
+/picosoc/hx8kdemo_syn.v
+/picosoc/icebreaker_syn.v
+# cpp-generated linker scripts
+/picosoc/hx8kdemo_sections.lds
+/picosoc/icebreaker_sections.lds
+# Bulk / sweep build output directories
+/picosoc/seed_sweep/
+/picosoc/build_fixed/
+
+# ---- editor / OS cruft ----
 .*.swp
+*~
 .DS_Store
