@@ -264,6 +264,87 @@ icache_multiword_lookahead (*)
 - Largest working size 64x16
 
 
+Unit Testbenches (I-cache & Compact Divider)
+============================================
+
+Two **self-checking** Icarus Verilog testbenches verify the blocks we added.
+Both compare the DUT against a golden reference model on directed + randomized
+stimulus and print `ALL TESTS PASSED` (and `$finish` with a non-zero error
+count on failure), so they drop straight into a regression flow.
+
+Tooling note: these use `iverilog`/`vvp` from the bundled `oss-cad-suite`. If
+they are not already on your `PATH`:
+
+```
+export PATH="$PWD/../oss-cad-suite/bin:$PATH"   # from picorv32/, adjust as needed
+```
+
+I-cache testbench — `picosoc/icache_tb.v`
+-----------------------------------------
+
+Exercises the two shipping caches (`icache_multiword_lookahead` and
+`icache_multiword_lookahead_2way`) at the port interface. Highlights:
+
+- **Behavioral memory model** with a runtime-adjustable fill latency; every
+  suite runs at latency **1 and 3** to stress the fill FSM.
+- **Replicates the picorv32 look-ahead protocol** — the look-ahead address is
+  presented one cycle *before* the real request, which is exactly what lets the
+  cache flop the synchronous block-RAM read into `la_cached_*` in time for a
+  single-cycle hit.
+- **Golden reference model** mirroring the RTL tag/index/valid state, and for
+  the 2-way cache the `lru_array` / `replace_way_next` logic. Each fetch is
+  checked two ways: returned data must equal `mem[addr>>2]`, and hit/miss must
+  match the model (so any divergence in *which* way is filled surfaces as a
+  later hit/miss mismatch).
+- **Tests:** cold-fill + re-hit, sequential walk, conflict (direct-mapped
+  thrash vs 2-way coexistence), 2-way LRU eviction, passthrough/no-pollution,
+  and 2000 randomized fetches per pass.
+
+The TB is parameterized at `LINES=8, WORDS_PER_LINE=4` (small, to force
+evictions quickly); bump the params to exercise the production `128x16` / `64x16`
+geometries.
+
+Run it:
+
+```
+cd picosoc
+make icache_test     # builds tb_dm + tb_2way, runs both
+```
+
+Divider testbench — `div_tb.v`
+------------------------------
+
+Drives `picorv32_pcpi_div` over the PCPI handshake and checks every result
+against an exact RV32M golden model — `div`/`divu`/`rem`/`remu`, including
+divide-by-zero and the `INT_MIN / -1` overflow case — with directed vectors
+(both sign combinations, edge cases) plus **4000 randomized** operations.
+
+Run it (from the `picorv32/` directory):
+
+```
+make div_test
+```
+
+Results
+-------
+
+All checks pass for both blocks (Icarus Verilog 14.0, oss-cad-suite):
+
+| Testbench            | Coverage                                   | Result |
+| -------------------- | ------------------------------------------ | ------ |
+| `div_tb` (divider)   | 4054 ops (directed + 4000 random)          | **PASS** |
+| `icache_tb` direct-mapped | directed + 2000 random × 2 latencies  | **PASS** |
+| `icache_tb` 2-way LRU     | directed + 2000 random × 2 latencies  | **PASS** |
+
+The random stream also gives a concrete read on the associativity win — on the
+*same* 2000-fetch sequence the 2-way cache services far more hits than the
+direct-mapped one, confirming it removes conflict misses:
+
+| Cache (8 sets × 4 words) | Hits / 2000 (latency 1) |
+| ------------------------ | ----------------------: |
+| direct-mapped            | 246                     |
+| 2-way set-associative    | 479                     |
+
 PicoRV32 - A Size-Optimized RISC-V CPU
 ======================================
 
