@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 Fixed PPA script for icebreaker design.
-Runs Yosys, nextpnr, icetime for multiple configurations.
+Supports CPU parameters, MEM_WORDS, cache size parameters,
+and cache module selection (from icache.v).
+Includes early functional testing via RISC-V instruction tests.
 """
 
 import subprocess
@@ -9,48 +11,59 @@ import re
 import csv
 import os
 import shutil
-from pathlib import Path
+import argparse
 
 # ---------- Configuration ----------
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)   # one level up (main_tues/)
+
 VERILOG_SOURCES = [
     "icebreaker.v",
     "ice40up5k_spram.v",
     "spimemio.v",
     "simpleuart.v",
+    "icache.v",
+    "dmem_lookahead_buffer.v",
     "picosoc.v",
-    "../picorv32.v"   # relative to script directory
+    os.path.join(PROJECT_ROOT, "picorv32.v")
 ]
 PCF_FILE = "icebreaker.pcf"
 TOP_MODULE = "icebreaker"
 DEVICE = "up5k"
 PACKAGE = "sg48"
 
-# Configurations: parameters to override in icebreaker.v (inside picosoc #(...))
+# ---------- Load configurations from CSV ----------
 def load_configs(csv_file="configs.csv"):
+    csv_path = os.path.join(SCRIPT_DIR, csv_file)
     configs = {}
-    with open(csv_file, 'r') as f:
+    with open(csv_path, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
             name = row.pop('config_name')
-            # Convert all values to integers (or leave as strings, then convert)
             params = {}
             for k, v in row.items():
-                # v is a string like "0" or "32768"
-                params[k.upper()] = int(v)   # store keys in uppercase to match existing code
+                try:
+                    params[k.upper()] = int(v)
+                except ValueError:
+                    params[k.upper()] = v
+            params['ENABLE_FAST_MUL'] = 0   # does not fit on iCE40
             configs[name] = params
     return configs
 
-# In main():
 CONFIGS = load_configs()
 
 # ---------- Helper functions ----------
 def run_cmd(cmd, desc, cwd=None, log_file=None):
-    """Run shell command, log output to file if provided."""
     print(f"  {desc}...", end=" ", flush=True)
     result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
     if log_file:
-        with open(log_file, 'w') as f:
-            f.write(f"COMMAND: {cmd}\n\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}")
+        log_file = os.path.abspath(log_file)
+        try:
+            with open(log_file, 'w') as f:
+                f.write(f"COMMAND: {cmd}\n\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}")
+            print(f"(log: {log_file})", end=" ", flush=True)
+        except Exception as e:
+            print(f"WARNING: failed to write log {log_file}: {e}", flush=True)
     if result.returncode == 0:
         print("OK")
     else:
@@ -60,67 +73,193 @@ def run_cmd(cmd, desc, cwd=None, log_file=None):
     return result.returncode, result.stdout, result.stderr
 
 def replace_in_file(file_path, pattern, replacement):
-    """Perform a regex replacement in a file."""
+    if not os.path.exists(file_path):
+        return False
     with open(file_path, 'r') as f:
         content = f.read()
-    new_content = re.sub(pattern, replacement, content)
+    new_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
     if new_content != content:
         with open(file_path, 'w') as f:
             f.write(new_content)
         return True
     return False
 
+def copy_test_infrastructure(build_dir):
+    """Copy testbench.v, Makefile, firmware/, tests/, scripts/ into build_dir."""
+    items = ["testbench.v", "Makefile", "firmware", "tests", "scripts"]
+    for item in items:
+        src = os.path.join(PROJECT_ROOT, item)
+        dst = os.path.join(build_dir, item)
+        if os.path.isdir(src):
+            if os.path.exists(dst):
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+        else:
+            shutil.copy2(src, dst)
+
+def override_testbench_params(build_dir, params):
+    """Modify testbench.v: set both parameter declarations and instance ports."""
+    tb_path = os.path.join(build_dir, "testbench.v")
+    if not os.path.exists(tb_path):
+        print("  WARNING: testbench.v not found, cannot override parameters")
+        return False
+
+    # All parameters we want to propagate to the testbench
+    tb_params = [
+        "ENABLE_MUL", "ENABLE_DIV", "ENABLE_FAST_MUL", "BARREL_SHIFTER",
+        "COMPRESSED_ISA", "ENABLE_COUNTERS", "ENABLE_IRQ",
+        "TWO_STAGE_SHIFT", "TWO_CYCLE_COMPARE", "TWO_CYCLE_ALU",
+        "ENABLE_REGS_DUALPORT", "ENABLE_COUNTERS64",
+        "CATCH_MISALIGN", "CATCH_ILLINSN", "LATCHED_MEM_RDATA",
+        "USE_CLK_DIVIDER", "ENABLE_IRQ_QREGS"
+    ]
+
+    # 1. Override parameter declarations
+    for p in tb_params:
+        if p in params:
+            pattern = rf'parameter\s+{p}\s*=\s*[01];'
+            replacement = f'parameter {p} = {params[p]};'
+            replace_in_file(tb_path, pattern, replacement)
+
+    # 2. Override instance port connections
+    for p in tb_params:
+        if p in params:
+            pattern = rf'\.{p}\s*\(\s*[01]\s*\)'
+            replacement = f'.{p}({params[p]})'
+            replace_in_file(tb_path, pattern, replacement)
+
+    # 3. ENABLE_PCPI is derived from mul/div
+    if params.get("ENABLE_MUL", 0) or params.get("ENABLE_DIV", 0):
+        replace_in_file(tb_path, r'parameter\s+ENABLE_PCPI\s*=\s*[01];', 'parameter ENABLE_PCPI = 1;')
+        replace_in_file(tb_path, r'\.ENABLE_PCPI\(\s*[01]\s*\)', '.ENABLE_PCPI(1)')
+    else:
+        replace_in_file(tb_path, r'parameter\s+ENABLE_PCPI\s*=\s*[01];', 'parameter ENABLE_PCPI = 0;')
+        replace_in_file(tb_path, r'\.ENABLE_PCPI\(\s*[01]\s*\)', '.ENABLE_PCPI(0)')
+
+    return True
+
+def run_tests_for_config(build_dir, timeout_sec=300):
+    """Run full test suite and return True if all RV32IM instructions pass."""
+    env = os.environ.copy()
+    try:
+        subprocess.run("make clean", cwd=build_dir, shell=True, env=env, check=False, capture_output=True)
+        result = subprocess.run(
+            "make test TOOLCHAIN_PREFIX=riscv64-unknown-elf-",
+            cwd=build_dir, shell=True, env=env,
+            timeout=timeout_sec,
+            capture_output=True, text=True
+        )
+        stdout = result.stdout
+        # RV32IM mandatory instructions (excluding IRQ, compressed, etc.)
+        required = [
+            "add..OK", "addi..OK", "sub..OK",
+            "and..OK", "andi..OK", "or..OK", "ori..OK", "xor..OK", "xori..OK",
+            "sll..OK", "slli..OK", "srl..OK", "srli..OK", "sra..OK", "srai..OK",
+            "slt..OK", "slti..OK", "sltu..OK", "sltiu..OK",
+            "lui..OK", "auipc..OK",
+            "beq..OK", "bne..OK", "blt..OK", "bge..OK", "bltu..OK", "bgeu..OK",
+            "jal..OK", "jalr..OK",
+            "lb..OK", "lbu..OK", "lh..OK", "lhu..OK", "lw..OK",
+            "sb..OK", "sh..OK", "sw..OK",
+            "mul..OK", "mulh..OK", "mulhsu..OK", "mulhu..OK",
+            "div..OK", "divu..OK", "rem..OK", "remu..OK"
+        ]
+        return all(ok in stdout for ok in required)
+    except Exception as e:
+        print(f"  Test error: {e}")
+        return False
+
 def generate_config_files(config_name, params, build_dir):
-    """Copy all source files to build_dir, then override parameters in icebreaker.v and picosoc.v."""
+    """Copy all source files, override parameters in icebreaker.v, picosoc.v, picorv32.v, and testbench.v."""
     os.makedirs(build_dir, exist_ok=True)
 
-    # 1. Copy all Verilog sources (including ../picorv32.v)
-    #    Resolve absolute path of script directory to handle relative paths correctly.
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # 1. Copy all Verilog sources
     for src in VERILOG_SOURCES:
-        # Resolve source path relative to script_dir
-        src_path = os.path.join(script_dir, src)
+        src_path = src
+        if not os.path.isabs(src_path):
+            src_path = os.path.join(SCRIPT_DIR, src)
         if not os.path.exists(src_path):
-            # Also try relative to current working directory (fallback)
-            src_path = src
-            if not os.path.exists(src_path):
-                print(f"  WARNING: Source {src} not found, skipping")
-                continue
+            src_path = os.path.join(SCRIPT_DIR, os.path.basename(src))
+        if not os.path.exists(src_path):
+            print(f"  WARNING: Source {src} not found, skipping")
+            continue
         dest = os.path.join(build_dir, os.path.basename(src))
         shutil.copy2(src_path, dest)
 
-    # 2. Override parameters in the copied icebreaker.v (inside picosoc #(...))
+    # 2. Override icebreaker.v instance ports (only those that exist as ports)
     icebreaker_path = os.path.join(build_dir, "icebreaker.v")
-    for param, value in params.items():
-        if param in ["BARREL_SHIFTER", "ENABLE_MUL", "ENABLE_DIV", "ENABLE_FAST_MUL"]:
-            # Replace .PARAM_NAME(0) or .PARAM_NAME(1) with new value
+    icebreaker_ports = ["BARREL_SHIFTER", "ENABLE_MUL", "ENABLE_DIV", "ENABLE_FAST_MUL"]
+    for param in icebreaker_ports:
+        if param in params:
             pattern = rf'\.{param}\s*\(\s*[01]\s*\)'
-            replacement = f'.{param}({value})'
-            replace_in_file(icebreaker_path, pattern, replacement)
+            replace_in_file(icebreaker_path, pattern, f'.{param}({params[param]})')
+    # Also handle USE_CLK_DIVIDER (integer, not binary) – optional
+    if "USE_CLK_DIVIDER" in params:
+        pattern = r'(parameter\s+USE_CLK_DIVIDER\s*=\s*)\d+;'
+        replace_in_file(icebreaker_path, pattern, rf'\g<1>{params["USE_CLK_DIVIDER"]};')
 
-    # 3. Override parameters in picosoc.v (parameter defaults and ENABLE_IRQ)
+    # 3. Override picosoc.v parameters (both parameters and ports)
     picosoc_path = os.path.join(build_dir, "picosoc.v")
-    for param, value in params.items():
-        if param == "ENABLE_COUNTERS":
-            # Replace parameter default lines: parameter [0:0] ENABLE_COUNTERS = 1;
-            pattern = rf'(parameter\s+\[0:0\]\s+{param}\s*=\s*)[01];'
-            replace_in_file(picosoc_path, pattern, rf'\g<1>{value};')
-    # Override ENABLE_IRQ in the picorv32 instantiation
+    # Parameters that appear as 'parameter' in picosoc.v
+    if "ENABLE_COUNTERS" in params:
+        pattern = r'(parameter\s+\[0:0\]\s+ENABLE_COUNTERS\s*=\s*)[01];'
+        replace_in_file(picosoc_path, pattern, rf'\g<1>{params["ENABLE_COUNTERS"]};')
+    if "ENABLE_COMPRESSED" in params:
+        pattern = r'(parameter\s+\[0:0\]\s+ENABLE_COMPRESSED\s*=\s*)[01];'
+        replace_in_file(picosoc_path, pattern, rf'\g<1>{params["ENABLE_COMPRESSED"]};')
+    if "ENABLE_IRQ_QREGS" in params:
+        pattern = r'(parameter\s+\[0:0\]\s+ENABLE_IRQ_QREGS\s*=\s*)[01];'
+        replace_in_file(picosoc_path, pattern, rf'\g<1>{params["ENABLE_IRQ_QREGS"]};')
+    # Instance port overrides in picosoc.v (for ENABLE_IRQ)
     if "ENABLE_IRQ" in params:
-        pattern = r'\.ENABLE_IRQ\(\d+\)'
-        replacement = f'.ENABLE_IRQ({params["ENABLE_IRQ"]})'
-        replace_in_file(picosoc_path, pattern, replacement)
+        replace_in_file(picosoc_path, r'\.ENABLE_IRQ\(\d+\)', f'.ENABLE_IRQ({params["ENABLE_IRQ"]})')
+    # Cache parameters
+    if "CACHE_LINES" in params:
+        replace_in_file(picosoc_path, r'\.LINES\(\s*\d+\s*\)', f'.LINES({params["CACHE_LINES"]})')
+    if "CACHE_WORDS_PER_LINE" in params:
+        replace_in_file(picosoc_path, r'\.WORDS_PER_LINE\(\s*\d+\s*\)', f'.WORDS_PER_LINE({params["CACHE_WORDS_PER_LINE"]})')
+    if "ENABLE_ICACHE" in params:
+        pattern = r'(parameter\s+ENABLE_ICACHE\s*=\s*)[01];'
+        replace_in_file(picosoc_path, pattern, rf'\g<1>{params["ENABLE_ICACHE"]};')
+    if "ENABLE_DMEM_LOOKAHEAD" in params:
+        pattern = r'(parameter\s+ENABLE_DMEM_LOOKAHEAD\s*=\s*)[01];'
+        replace_in_file(picosoc_path, pattern, rf'\g<1>{params["ENABLE_DMEM_LOOKAHEAD"]};')
+    if "CACHE_MODULE" in params:
+        cache_mod = params["CACHE_MODULE"]
+        if cache_mod.lower() == "none":
+            replace_in_file(picosoc_path, r'(parameter\s+ENABLE_ICACHE\s*=\s*)[01];', r'\g<1>0;')
+        else:
+            replace_in_file(picosoc_path, r'(parameter\s+ENABLE_ICACHE\s*=\s*)[01];', r'\g<1>1;')
+            pattern = r'(\b)icache_\w+(?=\s*#\()'
+            replace_in_file(picosoc_path, pattern, rf'\g<1>{cache_mod}')
 
-    # 4. Ensure ../picorv32.v is copied as picorv32.v (already done above)
-    #    But verify it exists in build_dir
-    picorv32_dest = os.path.join(build_dir, "picorv32.v")
-    if not os.path.exists(picorv32_dest):
+    # 4. Override picorv32.v internal parameters (direct file edit)
+    picorv32_path = os.path.join(build_dir, "picorv32.v")
+    if os.path.exists(picorv32_path):
+        internal_params = [
+            "TWO_STAGE_SHIFT", "TWO_CYCLE_COMPARE", "TWO_CYCLE_ALU",
+            "ENABLE_REGS_DUALPORT", "ENABLE_COUNTERS64",
+            "CATCH_MISALIGN", "CATCH_ILLINSN", "LATCHED_MEM_RDATA"
+        ]
+        for param in internal_params:
+            if param in params:
+                # Flexible regex: matches "parameter [ 0 : 0 ] PARAM_NAME = 0,"
+                pattern = rf'(parameter\s+\[\s*0\s*:\s*0\s*\]\s+{param}\s*=\s*)[01]\s*,'
+                replacement = rf'\g<1>{params[param]},'
+                replace_in_file(picorv32_path, pattern, replacement)
+
+    # 5. Copy test infrastructure and override testbench parameters
+    copy_test_infrastructure(build_dir)
+    override_testbench_params(build_dir, params)
+
+    # 6. Verify picorv32.v exists (should be there)
+    if not os.path.exists(picorv32_path):
         print(f"  ERROR: picorv32.v not found in build directory!")
         return False
     return True
 
+# ---------- PPA measurement functions (unchanged) ----------
 def get_area_from_yosys(log_text):
-    """Parse Yosys 'stat' output for cell counts."""
     luts = ffs = brams = dsps = carry = 0
     m = re.search(r'SB_LUT4\s+(\d+)', log_text)
     if m: luts = int(m.group(1))
@@ -135,7 +274,6 @@ def get_area_from_yosys(log_text):
     return luts, ffs, brams, dsps, carry
 
 def get_timing_from_icetime(rpt_file):
-    """Parse icetime report for Fmax (MHz) and logic levels."""
     fmax = 0.0
     levels = 0
     if not os.path.exists(rpt_file):
@@ -152,66 +290,184 @@ def get_timing_from_icetime(rpt_file):
         levels = int(m.group(1))
     return fmax, levels
 
-def process_config(config_name, params, build_root):
-    """Generate modified sources, run synthesis/P&R/timing, return metrics dict."""
+def parse_nextpnr_utilization(output):
+    util = {
+        'lc_used': 0, 'lc_total': 0, 'lc_percent': 0,
+        'ram_used': 0, 'ram_total': 0, 'ram_percent': 0,
+        'dsp_used': 0, 'dsp_total': 0, 'dsp_percent': 0,
+        'io_used': 0, 'io_total': 0, 'io_percent': 0,
+        'pll_used': 0, 'pll_total': 0, 'pll_percent': 0,
+        'gb_used': 0, 'gb_total': 0, 'gb_percent': 0,
+    }
+    for line in output.splitlines():
+        line = line.lstrip()
+        if line.startswith('Info:'):
+            line = line[5:].lstrip()
+        m = re.match(r'(\S+)\s*:\s*(\d+)\s*/\s*(\d+)\s*(\d+)%', line)
+        if m:
+            res, used, total, pct = m.groups()
+            used, total, pct = int(used), int(total), int(pct)
+            if res == 'ICESTORM_LC':
+                util['lc_used'], util['lc_total'], util['lc_percent'] = used, total, pct
+            elif res == 'ICESTORM_RAM':
+                util['ram_used'], util['ram_total'], util['ram_percent'] = used, total, pct
+            elif res == 'ICESTORM_DSP':
+                util['dsp_used'], util['dsp_total'], util['dsp_percent'] = used, total, pct
+            elif res == 'SB_IO':
+                util['io_used'], util['io_total'], util['io_percent'] = used, total, pct
+            elif res == 'ICESTORM_PLL':
+                util['pll_used'], util['pll_total'], util['pll_percent'] = used, total, pct
+            elif res == 'SB_GB':
+                util['gb_used'], util['gb_total'], util['gb_percent'] = used, total, pct
+    return util
+
+def process_config(config_name, params, build_root, skip_tests=False, continue_on_test_fail=False):
     build_dir = os.path.join(build_root, config_name)
     if not generate_config_files(config_name, params, build_dir):
         return None
 
-    # Also copy the PCF file into the build directory
-    pcf_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), PCF_FILE)
-    if not os.path.exists(pcf_src):
-        pcf_src = PCF_FILE
+    # Run tests (may decide to skip PPA if tests fail and continue_on_test_fail is False)
+    tests_passed = False
+    if not skip_tests:
+        print("  Running smoke tests...")
+        tests_passed = run_tests_for_config(build_dir)
+        if tests_passed:
+            print("  Smoke tests PASSED")
+        else:
+            print("  Smoke tests FAILED")
+            if not continue_on_test_fail:
+                print("  Skipping synthesis/P&R for this config (use --continue-on-test-fail to override)")
+                # Return minimal metrics with tests_pass=0 and zeros for PPA
+                metrics = {
+                    "config": config_name,
+                    "tests_pass": 0,
+                    "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
+                    "fmax_mhz": 0, "logic_levels": 0,
+                    "lc_used": 0, "lc_total": 0, "lc_percent": 0,
+                    "ram_used": 0, "ram_total": 0, "ram_percent": 0,
+                    "dsp_used": 0, "dsp_total": 0, "dsp_percent": 0,
+                    "io_used": 0, "io_total": 0, "io_percent": 0,
+                    "pll_used": 0, "pll_total": 0, "pll_percent": 0,
+                    "gb_used": 0, "gb_total": 0, "gb_percent": 0,
+                }
+                for k, v in params.items():
+                    metrics[k.lower()] = v
+                return metrics
+    else:
+        print("  Skipping tests (--skip-tests used)")
+
+    # Copy PCF file
+    pcf_src = os.path.join(SCRIPT_DIR, PCF_FILE)
     if os.path.exists(pcf_src):
         shutil.copy2(pcf_src, build_dir)
     else:
         print(f"  ERROR: PCF file {PCF_FILE} not found")
         return None
 
-    # Source files (basenames only, because cwd=build_dir)
     source_files = [
         "icebreaker.v",
         "ice40up5k_spram.v",
         "spimemio.v",
         "simpleuart.v",
+        "icache.v",
+        "dmem_lookahead_buffer.v",
         "picosoc.v",
         "picorv32.v"
     ]
 
-    # ---- Yosys synthesis (already works, keep as is) ----
+    # Yosys synthesis
     yosys_log = os.path.join(build_dir, "yosys_synth.log")
     yosys_cmd = f"yosys -p 'read_verilog {' '.join(source_files)}; synth_ice40 -top {TOP_MODULE}; stat -width'"
     rc, stdout, stderr = run_cmd(yosys_cmd, "Yosys synthesis", cwd=build_dir, log_file=yosys_log)
     if rc != 0:
-        print(f"  Yosys failed. Check {yosys_log}")
-        return None
+        # Return zeros but record test result
+        metrics = {
+            "config": config_name,
+            "tests_pass": 1 if tests_passed else 0,
+            "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
+            "fmax_mhz": 0, "logic_levels": 0,
+            "lc_used": 0, "lc_total": 0, "lc_percent": 0,
+            "ram_used": 0, "ram_total": 0, "ram_percent": 0,
+            "dsp_used": 0, "dsp_total": 0, "dsp_percent": 0,
+            "io_used": 0, "io_total": 0, "io_percent": 0,
+            "pll_used": 0, "pll_total": 0, "pll_percent": 0,
+            "gb_used": 0, "gb_total": 0, "gb_percent": 0,
+        }
+        for k, v in params.items():
+            metrics[k.lower()] = v
+        return metrics
     log = stdout + stderr
     luts, ffs, brams, dsps, carry = get_area_from_yosys(log)
 
-    # ---- Yosys to JSON - use only filename ----
+    # Yosys to JSON
     json_file = "design.json"
     json_cmd = f"yosys -q -p 'read_verilog {' '.join(source_files)}; synth_ice40 -top {TOP_MODULE} -json {json_file}'"
     rc, _, _ = run_cmd(json_cmd, "Yosys to JSON", cwd=build_dir)
     if rc != 0:
-        return None
+        metrics = {
+            "config": config_name,
+            "tests_pass": 1 if tests_passed else 0,
+            "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
+            "fmax_mhz": 0, "logic_levels": 0,
+            "lc_used": 0, "lc_total": 0, "lc_percent": 0,
+            "ram_used": 0, "ram_total": 0, "ram_percent": 0,
+            "dsp_used": 0, "dsp_total": 0, "dsp_percent": 0,
+            "io_used": 0, "io_total": 0, "io_percent": 0,
+            "pll_used": 0, "pll_total": 0, "pll_percent": 0,
+            "gb_used": 0, "gb_total": 0, "gb_percent": 0,
+        }
+        for k, v in params.items():
+            metrics[k.lower()] = v
+        return metrics
 
-    # ---- nextpnr - use basename for json and pcf ----
+    # nextpnr
     asc_file = "design.asc"
+    pnr_log = os.path.join(build_dir, "nextpnr.log")
     pnr_cmd = f"nextpnr-ice40 --{DEVICE} --package {PACKAGE} --json {json_file} --pcf {PCF_FILE} --asc {asc_file} --pcf-allow-unconstrained"
-    rc, _, _ = run_cmd(pnr_cmd, "NextPNR", cwd=build_dir)
+    rc, stdout, stderr = run_cmd(pnr_cmd, "NextPNR", cwd=build_dir, log_file=pnr_log)
     if rc != 0:
-        return None
+        metrics = {
+            "config": config_name,
+            "tests_pass": 1 if tests_passed else 0,
+            "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
+            "fmax_mhz": 0, "logic_levels": 0,
+            "lc_used": 0, "lc_total": 0, "lc_percent": 0,
+            "ram_used": 0, "ram_total": 0, "ram_percent": 0,
+            "dsp_used": 0, "dsp_total": 0, "dsp_percent": 0,
+            "io_used": 0, "io_total": 0, "io_percent": 0,
+            "pll_used": 0, "pll_total": 0, "pll_percent": 0,
+            "gb_used": 0, "gb_total": 0, "gb_percent": 0,
+        }
+        for k, v in params.items():
+            metrics[k.lower()] = v
+        return metrics
+    util = parse_nextpnr_utilization(stdout + stderr)
 
-    # ---- icetime - use basename for asc ----
+    # icetime
     timing_rpt = "timing.rpt"
     icetime_cmd = f"icetime -d {DEVICE} -mtr {timing_rpt} {asc_file}"
     rc, _, _ = run_cmd(icetime_cmd, "icetime", cwd=build_dir)
     if rc != 0:
-        return None
+        metrics = {
+            "config": config_name,
+            "tests_pass": 1 if tests_passed else 0,
+            "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
+            "fmax_mhz": 0, "logic_levels": 0,
+            "lc_used": 0, "lc_total": 0, "lc_percent": 0,
+            "ram_used": 0, "ram_total": 0, "ram_percent": 0,
+            "dsp_used": 0, "dsp_total": 0, "dsp_percent": 0,
+            "io_used": 0, "io_total": 0, "io_percent": 0,
+            "pll_used": 0, "pll_total": 0, "pll_percent": 0,
+            "gb_used": 0, "gb_total": 0, "gb_percent": 0,
+        }
+        for k, v in params.items():
+            metrics[k.lower()] = v
+        return metrics
     fmax, logic_levels = get_timing_from_icetime(os.path.join(build_dir, timing_rpt))
 
     metrics = {
         "config": config_name,
+        "tests_pass": 1 if tests_passed else 0,
         "luts": luts,
         "ffs": ffs,
         "brams": brams,
@@ -219,28 +475,45 @@ def process_config(config_name, params, build_root):
         "carry_cells": carry,
         "fmax_mhz": fmax,
         "logic_levels": logic_levels,
+        "lc_used": util['lc_used'],
+        "lc_total": util['lc_total'],
+        "lc_percent": util['lc_percent'],
+        "ram_used": util['ram_used'],
+        "ram_total": util['ram_total'],
+        "ram_percent": util['ram_percent'],
+        "dsp_used": util['dsp_used'],
+        "dsp_total": util['dsp_total'],
+        "dsp_percent": util['dsp_percent'],
+        "io_used": util['io_used'],
+        "io_total": util['io_total'],
+        "io_percent": util['io_percent'],
+        "pll_used": util['pll_used'],
+        "pll_total": util['pll_total'],
+        "pll_percent": util['pll_percent'],
+        "gb_used": util['gb_used'],
+        "gb_total": util['gb_total'],
+        "gb_percent": util['gb_percent'],
     }
     for k, v in params.items():
         metrics[k.lower()] = v
     return metrics
 
-# ---------- Main ----------
 def main():
-    # Ensure we are in the right directory (picosoc/)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--skip-tests', action='store_true', help='Skip functional simulation tests (run only PPA)')
+    parser.add_argument('--continue-on-test-fail', action='store_true', help='Continue to synthesis/P&R even if functional tests fail')
+    args = parser.parse_args()
+
     required_files = ["icebreaker.v", "picosoc.v", "icebreaker.pcf"]
-    missing = [f for f in required_files if not os.path.exists(f)]
+    missing = [f for f in required_files if not os.path.exists(os.path.join(SCRIPT_DIR, f))]
     if missing:
-        print(f"ERROR: Missing required files in current directory: {missing}")
-        print("Run this script from the picosoc/ directory.")
+        print(f"ERROR: Missing required files in {SCRIPT_DIR}: {missing}")
+        return
+    if not os.path.exists(os.path.join(PROJECT_ROOT, "picorv32.v")):
+        print("ERROR: picorv32.v not found in project root.")
         return
 
-    # Check that ../picorv32.v exists
-    if not os.path.exists("../picorv32.v"):
-        print("ERROR: ../picorv32.v not found. Please ensure picorv32.v is in the parent directory.")
-        return
-
-    build_root = "build_fixed"
-    # Clean previous build? Optional: keep for debugging
+    build_root = os.path.join(SCRIPT_DIR, "build_fixed")
     if os.path.exists(build_root):
         shutil.rmtree(build_root)
     os.makedirs(build_root, exist_ok=True)
@@ -248,18 +521,21 @@ def main():
     results = []
     for config_name, params in CONFIGS.items():
         print(f"\n=== Running {config_name} ===")
-        metrics = process_config(config_name, params, build_root)
+        metrics = process_config(config_name, params, build_root, skip_tests=args.skip_tests,continue_on_test_fail=args.continue_on_test_fail)
         if metrics:
             results.append(metrics)
-            print(f"  LUTs: {metrics['luts']}, Fmax: {metrics['fmax_mhz']:.2f} MHz")
+            if metrics.get('tests_pass', 0) == 1:
+                print(f"  LUTs: {metrics['luts']}, Fmax: {metrics['fmax_mhz']:.2f} MHz")
+            else:
+                print(f"  {config_name} failed functional tests.")
         else:
-            print(f"  {config_name} failed.")
+            print(f"  {config_name} failed (synthesis/P&R error).")
 
     if not results:
         print("No successful runs, exiting.")
         return
 
-    csv_file = "ppa_config_fixed.csv"
+    csv_file = os.path.join(SCRIPT_DIR, "ppa_config_fixed.csv")
     with open(csv_file, 'w', newline='') as f:
         fieldnames = list(results[0].keys())
         writer = csv.DictWriter(f, fieldnames=fieldnames)
