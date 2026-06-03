@@ -24,6 +24,14 @@ GIT_ENV = true
 test: testbench.vvp firmware/firmware.hex
 	$(VVP) -N $<
 
+# ---- compact divider unit testbench (self-checking) ----
+div_test: div_tb.vvp
+	$(VVP) -N $<
+
+div_tb.vvp: div_tb.v picorv32.v
+	$(IVERILOG) -g2012 -o $@ -s div_tb $^
+	chmod -x $@
+
 test_vcd: testbench.vvp firmware/firmware.hex
 	$(VVP) -N $< +vcd +trace +noerror
 
@@ -181,4 +189,4 @@ clean:
 		testbench_rvf.vvp testbench_wb.vvp testbench.vcd testbench.trace \
 		testbench_verilator testbench_verilator_dir
 
-.PHONY: test test_vcd test_sp test_axi test_wb test_wb_vcd test_ez test_ez_vcd test_synth download-tools build-tools toc clean
+.PHONY: test div_test test_vcd test_sp test_axi test_wb test_wb_vcd test_ez test_ez_vcd test_synth download-tools build-tools toc clean
