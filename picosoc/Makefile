@@ -69,7 +69,7 @@ icebreaker_syn.v: icebreaker.json
 	yosys -p 'read_json icebreaker.json; write_verilog icebreaker_syn.v'
 
 icebreaker.asc: icebreaker.pcf icebreaker.json
-	nextpnr-ice40 --freq 16 --seed 46 --up5k --package sg48 --asc icebreaker.asc --pcf icebreaker.pcf --json icebreaker.json
+	nextpnr-ice40 --freq 16 --seed 293 --up5k --package sg48 --asc icebreaker.asc --pcf icebreaker.pcf --json icebreaker.json
 
 icebreaker.bin: icebreaker.asc
 	icetime -d up5k -c 16 -mtr icebreaker.rpt icebreaker.asc
@@ -112,8 +112,8 @@ icebprog: icebreaker.bin icebreaker_fw.bin
 	iceprog icebreaker.bin
 	iceprog -o 1M icebreaker_fw.bin
 
-icebreaker_benchmark.elf: icebreaker_sections.lds start.s benchmark.c
-	$(CROSS)gcc $(CFLAGS) -DICEBREAKER -mabi=ilp32 -march=rv32im -Wl,-Bstatic,-T,icebreaker_sections.lds,--strip-debug -ffreestanding -nostdlib -o $@ start.s benchmark.c
+icebreaker_benchmark.elf: icebreaker_sections.lds start.s group5_benchmark.c
+	$(CROSS)gcc $(CFLAGS) -DICEBREAKER -mabi=ilp32 -march=rv32im -Wl,-Bstatic,-T,icebreaker_sections.lds,--strip-debug -ffreestanding -nostdlib -o $@ start.s group5_benchmark.c
 
 icebreaker_benchmark.bin: icebreaker_benchmark.elf
 	$(CROSS)objcopy -O binary $< $@
