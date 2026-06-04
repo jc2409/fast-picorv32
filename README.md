@@ -3,12 +3,16 @@
 Benchmark Design
 ================
 
+## Benchmark Goal
+
 The benchmark was designed with the following criteria in mind:
 
-- Our cache is large: the final best-performing cache is 64 sets, 2 ways, and 16 words per line, allowing a total of 2,048 instructions. Therefore, the benchmark should highlight that our processor is performant even with a large benchmark program loop, with close to this many number of instructions, demonstrating advantages over teams who may have implemented a smaller cache.
-- Our cache is associative. If possible, the benchmark should be designed to highlight how the associativity reduces conflict misses, such as in situations where the benchmark main loop jumps around in the program file instead of staying in a sequential set of instructions.
-- We have data memory lookahead for memory read instructions, so the benchmark should include load instructions (such as using a lookup table).
+- **Our cache is large**: the final best-performing cache is 64 sets, 2 ways, and 16 words per line, allowing a total of 2,048 instructions. Therefore, the benchmark should highlight that our processor is performant even with a large benchmark program loop, with close to this many number of instructions, demonstrating advantages over teams who may have implemented a smaller cache.
+- **Our cache is associative**. If possible, the benchmark should be designed to highlight how the associativity reduces conflict misses, such as in situations where the benchmark main loop jumps around in the program file instead of staying in a sequential set of instructions.
+- **We have data memory lookahead** for memory read instructions, so the benchmark should include load instructions (such as using a lookup table).
 - It would be nice to have a benchmark that does a task that could be useful in the real-world.
+
+## Benchmark Design
 
 The final benchmark is an iteration of the initial polynomial numerical integration used for preliminary testing. It loops through integrating 19 different 2-D quadratic polynomials sequentially for each x and y coordinate in a 48x48 grid. It also adds an additional "sinusoidal" term to each polynomial based on a mock sin() lookup table, to use additional load instructions. An example of the core code for one of the 19 polynomials is below:
 
@@ -29,11 +33,14 @@ The benchmark also generates a large number of conflict misses for a non-associa
 
 Since the benchmark uses a sine LUT (and other parts of the polynomial calculation logic uses load instructions too), more than a quarter of instructions are memory loads, allowing our data memory lookahead interface to improve CPI by around 0.26. 
 
+## Effect of Hot-Loop Size and Associativity
+
 The figure below shows that before the hot-loop instruction count exceeds the cache size (at around 22 polynomials), the associative cache indeed outperforms the direct-mapped cache, and this is clearly due to avoided conflict misses. Our benchmark, at 19 polynomials, is done at the "sweet-spot" - the largest instruction count supported by the associative cache before noticeable conflict misses. Interestingly, the direct mapped cache outperforms the associative cache for when the number of instructions exceeds the cache capacity. This is a little surprising but not impossible (for an example, consider 8-line direct mapped vs 4x2-way cache for instruction stream 0, 4, 8, 0, 4, 8...).
 
 <img width="670" height="411" alt="image" src="https://github.com/user-attachments/assets/ff917e72-6a0a-40e0-af57-f2866073a92a" />
 
-**Results**
+
+## Results
 
 As intended, our benchmark demonstrates the advantage of our full configuration - removing any of the three aforementioned elements (large size, associativity, data lookeahead) noticeably deteriorates performance. 
 
@@ -43,22 +50,36 @@ As intended, our benchmark demonstrates the advantage of our full configuration 
 | Same, without associativity (128x16 cache)  |  9.5077 |
 | Same, without data lookahead   |  4.9738 |
 | Same, but cache half the size (32x2x16) | 13.4983 |
+| Baseline picorv32, no cache, no lookahead| 10.1860 |
+
+Our full configuration outperforms the baseline design with no cache and no datalookahead whatsoever, which achieves 10.1860 CPI, by a factor of 2.161x. 
+
+If a team isn't using the fast QDDR SPI flash, and has a non-associative cache or smaller cache, CPI skyrockets to around 39-69! Our benchmark file doesn't enable QDDR SPI flash, but our processor turns it on in the hardware (register reset value in spimemio.v)
+
+Note that the cache-too-small case achieves worse CPI of ~13.5 than no cache at all, likely due to the high words-per-line requiring sometimes-unused fills. But since all teams are building caches and we have the largest possible cache in BRAM, I expect any team's cache-oriented benchmark should fit in our cache, so I'm not too worried about this case). 
 
 Latest Cache + Data Memory Lookahead Buffer Benchmark Data
 ==========================================================
 
-<img width="770" height="353" alt="image" src="https://github.com/user-attachments/assets/37c2ca74-cc6b-417a-adf2-5db292018b0a" />
+<img width="1477" height="408" alt="image" src="https://github.com/user-attachments/assets/ecb8ae2f-2793-4dda-b972-ffbb99b73a29" />
 
-Added a data memory lookahead buffer using the picorv32 lookahead interface
-so data memory reads take 0 cycles instead of 1. Reduces 1 CPI for each lw 
-instruction. Hence, e.g. in the integral benchmark 10/27 instructions in
-the hot loop are lw, matching closely with 0.37 CPI savings measured in 
-benchmark. 
+The multiword cache (with 1-cycle BRAM access) was iteratively built upon.
 
-Similar to the icache, its a transparent interface instantiated in
-picosoc.v. 
+The first improvement was to use the CPU mem_la_* interface to lookahead at upcoming instruction fetches. This eliminated the 1-cycle hit/miss check and allows zero-cycle return of the cache hit data by the time the instruction fetch request arrives at the standard interface. (See Note) 
 
-More documentation coming soon... 
+Next, a data memory lookahead buffer was added, also using the lookahead interface,
+so data memory reads take 0 cycles instead of 1. This reduces 1 CPI for each lw 
+instruction, which is often around 20-30% of the total number of instructions. 
+
+Finally, the cache was made to be associative, with two "ways". See the benchmark design section above for data that highlights how this improves CPI. 
+
+<sub> Note: it's not entirely true that we need to use the cpu memory lookahead interface to achieve zero-cycle hit response. In fact, if, in the Verilog you naively write a combinational circuit using the data_array (ignoring the synchronous nature of the BRAM), synthesis still allows it and uses BRAM because it is very clever. 
+
+Synthesis does not see the wrappers like the cpu module or hierarchical structures - everything is 'see-through' and synthesis can access any net it wants (and only sees the true combinational equations governing the CPU, not the semantic meaning of different signals). So it would find a way to get something equivalent to the lookahead signals from different parts of the CPU design, and still use a BRAM synchronously, achieving the same as what the lookahead version of the cache does! (You can somewhat see how it works if you dig through the json file, but it's not very clear.)
+
+However, since we are forcing synthesis to be so clever, it finds the required signals in a possibly sub-optimal way, resulting in poor timing. A "naive" cache that tries to use the BRAM combinationally and forcing synthesis to be clever results in poor timing, around 16 MHz. But my cache which explicitly uses the lookahead interface, thereby guiding synthesis in the right direction, achieves better timing of 18-19 MHz! 
+
+This was one of my coolest discoveries when I finally understood what was going on. </sub>
 
 
 Compact Restoring Divider (area reduction)
