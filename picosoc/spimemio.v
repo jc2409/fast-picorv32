@@ -105,10 +105,14 @@ module spimemio (
 			config_clk <= 0;
 			config_oe <= 0;
 			config_do <= 0;
-			config_ddr <= 0;
-			config_qspi <= 0;
+			// Default to same SPI-controller mode as set_flash_mode_qddr():
+			// So always use fast SPI FLASH
+			// reg_spictrl = (reg_spictrl & ~0x007f0000) | 0x00670000;
+
+			config_ddr <= 1;
+			config_qspi <= 1;
 			config_cont <= 0;
-			config_dummy <= 8;
+			config_dummy <= 7;
 		end else begin
 			if (cfgreg_we[0]) begin
 				config_csb <= cfgreg_di[5];

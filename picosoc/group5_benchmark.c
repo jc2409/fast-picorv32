@@ -145,11 +145,13 @@ void setup_picosoc(void){
 	reg_7seg = 0x02;       // represents Demo 02
 	reg_leds = 0x00;
 	set_flash_qspi_flag();
-	set_flash_mode_qddr(); // fastest SPI flash
+	//set_flash_mode_qddr(); // fastest SPI flash
 }
 
 // --------------------------------------------------------
-// Cache-footprint polynomial/sine surface benchmark
+// Polynomial*sine numerical integral benchmark
+// 19 Polynomials (some terms multiplied by sin) over a 48x48 numerical integral
+// Expected checksum 0x9b
 //
 // Workload:
 //   sum over x,y of many small polynomial kernels.
@@ -157,11 +159,29 @@ void setup_picosoc(void){
 //
 // Justification:
 //   The hot instruction footprint is deliberately large to fill our large cache
+//   64x2x16 = 2048 instructions,
 //   (which is largest clean power of 2 cache that will fit on the BRAM)
+//
+//   Disassembly: Approx 1700 instructions in entire hot loop
+//                 412 in main body (preparing to call the polynomials, setting up LUT access)
+//                +1290 in polynomial functions
+// 
 //   We use sine_lut for a lot of lw instructions (take advantage of
-//   dmem lookahead)
+//   dmem lookahead). Around 26% are load instructions.
+// 
 //   This particular combination also has set-associative cache
 //   beating direct-mapped cache by a lot.
+//
+//   Results: 
+//        Full setup: 64x2x16 associative, data lookahead 4.7135 CPI
+//        Missing data lookahead:                         4.9738 CPI
+//        Non-associative:                                9.5077 CPI
+//        Half-size cache 32x2x16:                       13.4983 CPI
+//   As such, this benchmark stress-tests the cache and memory system
+//   effectively, and any missing 'feature' would be punished
+
+//   N.B. only first 19 polynomials are used, but keep the rest because it pads
+//   the assembly values such that a non-associative (direct mapped) cache struggles badly...
 
 #define NX 48
 #define NY 48
@@ -413,7 +433,545 @@ static uint32_t poly_18(uint32_t x, uint32_t y, int32_t s){
     return z;
 }
 
+__attribute__((noinline, used))
+static uint32_t poly_19(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 8*x2 + 1*y2 + 4*xy + 5*x + 20*y + 720;
+    int32_t t = (3*(int32_t)x + 6*(int32_t)y + 21) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
 
+__attribute__((noinline, used))
+static uint32_t poly_20(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 11*x2 + 6*y2 + 11*xy + 16*x + 33*y + 757;
+    int32_t t = (6*(int32_t)x + 11*(int32_t)y + 11) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_21(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 14*x2 + 11*y2 + 5*xy + 4*x + 17*y + 794;
+    int32_t t = (9*(int32_t)x + 3*(int32_t)y + 18) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_22(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 17*x2 + 16*y2 + 12*xy + 15*x + 30*y + 831;
+    int32_t t = (1*(int32_t)x + 8*(int32_t)y + 8) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_23(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 3*x2 + 2*y2 + 6*xy + 3*x + 14*y + 868;
+    int32_t t = (4*(int32_t)x + 13*(int32_t)y + 15) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_24(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 6*x2 + 7*y2 + 13*xy + 14*x + 27*y + 905;
+    int32_t t = (7*(int32_t)x + 5*(int32_t)y + 22) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_25(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 9*x2 + 12*y2 + 7*xy + 25*x + 11*y + 942;
+    int32_t t = (10*(int32_t)x + 10*(int32_t)y + 12) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_26(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 12*x2 + 17*y2 + 1*xy + 13*x + 24*y + 979;
+    int32_t t = (2*(int32_t)x + 2*(int32_t)y + 19) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_27(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 15*x2 + 3*y2 + 8*xy + 24*x + 8*y + 1016;
+    int32_t t = (5*(int32_t)x + 7*(int32_t)y + 9) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_28(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 18*x2 + 8*y2 + 2*xy + 12*x + 21*y + 1053;
+    int32_t t = (8*(int32_t)x + 12*(int32_t)y + 16) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_29(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 4*x2 + 13*y2 + 9*xy + 23*x + 5*y + 1090;
+    int32_t t = (11*(int32_t)x + 4*(int32_t)y + 23) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_30(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 7*x2 + 18*y2 + 3*xy + 11*x + 18*y + 1127;
+    int32_t t = (3*(int32_t)x + 9*(int32_t)y + 13) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_31(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 10*x2 + 4*y2 + 10*xy + 22*x + 31*y + 1164;
+    int32_t t = (6*(int32_t)x + 14*(int32_t)y + 20) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_32(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 13*x2 + 9*y2 + 4*xy + 10*x + 15*y + 1201;
+    int32_t t = (9*(int32_t)x + 6*(int32_t)y + 10) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_33(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 16*x2 + 14*y2 + 11*xy + 21*x + 28*y + 1238;
+    int32_t t = (1*(int32_t)x + 11*(int32_t)y + 17) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_34(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 2*x2 + 19*y2 + 5*xy + 9*x + 12*y + 1275;
+    int32_t t = (4*(int32_t)x + 3*(int32_t)y + 7) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_35(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 5*x2 + 5*y2 + 12*xy + 20*x + 25*y + 1312;
+    int32_t t = (7*(int32_t)x + 8*(int32_t)y + 14) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_36(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 8*x2 + 10*y2 + 6*xy + 8*x + 9*y + 1349;
+    int32_t t = (10*(int32_t)x + 13*(int32_t)y + 21) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_37(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 11*x2 + 15*y2 + 13*xy + 19*x + 22*y + 1386;
+    int32_t t = (2*(int32_t)x + 5*(int32_t)y + 11) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_38(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 14*x2 + 1*y2 + 7*xy + 7*x + 6*y + 1423;
+    int32_t t = (5*(int32_t)x + 10*(int32_t)y + 18) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_39(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 17*x2 + 6*y2 + 1*xy + 18*x + 19*y + 1460;
+    int32_t t = (8*(int32_t)x + 2*(int32_t)y + 8) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_40(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 3*x2 + 11*y2 + 8*xy + 6*x + 32*y + 1497;
+    int32_t t = (11*(int32_t)x + 7*(int32_t)y + 15) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_41(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 6*x2 + 16*y2 + 2*xy + 17*x + 16*y + 1534;
+    int32_t t = (3*(int32_t)x + 12*(int32_t)y + 22) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_42(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 9*x2 + 2*y2 + 9*xy + 5*x + 29*y + 1571;
+    int32_t t = (6*(int32_t)x + 4*(int32_t)y + 12) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_43(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 12*x2 + 7*y2 + 3*xy + 16*x + 13*y + 1608;
+    int32_t t = (9*(int32_t)x + 9*(int32_t)y + 19) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_44(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 15*x2 + 12*y2 + 10*xy + 4*x + 26*y + 1645;
+    int32_t t = (1*(int32_t)x + 14*(int32_t)y + 9) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_45(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 18*x2 + 17*y2 + 4*xy + 15*x + 10*y + 1682;
+    int32_t t = (4*(int32_t)x + 6*(int32_t)y + 16) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_46(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 4*x2 + 3*y2 + 11*xy + 3*x + 23*y + 1719;
+    int32_t t = (7*(int32_t)x + 11*(int32_t)y + 23) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_47(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 7*x2 + 8*y2 + 5*xy + 14*x + 7*y + 1756;
+    int32_t t = (10*(int32_t)x + 3*(int32_t)y + 13) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_48(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 10*x2 + 13*y2 + 12*xy + 25*x + 20*y + 1793;
+    int32_t t = (2*(int32_t)x + 8*(int32_t)y + 20) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_49(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 13*x2 + 18*y2 + 6*xy + 13*x + 33*y + 1830;
+    int32_t t = (5*(int32_t)x + 13*(int32_t)y + 10) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_50(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 16*x2 + 4*y2 + 13*xy + 24*x + 17*y + 1867;
+    int32_t t = (8*(int32_t)x + 5*(int32_t)y + 17) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_51(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 2*x2 + 9*y2 + 7*xy + 12*x + 30*y + 1904;
+    int32_t t = (11*(int32_t)x + 10*(int32_t)y + 7) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_52(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 5*x2 + 14*y2 + 1*xy + 23*x + 14*y + 1941;
+    int32_t t = (3*(int32_t)x + 2*(int32_t)y + 14) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_53(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 8*x2 + 19*y2 + 8*xy + 11*x + 27*y + 1978;
+    int32_t t = (6*(int32_t)x + 7*(int32_t)y + 21) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_54(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 11*x2 + 5*y2 + 2*xy + 22*x + 11*y + 2015;
+    int32_t t = (9*(int32_t)x + 12*(int32_t)y + 11) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_55(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 14*x2 + 10*y2 + 9*xy + 10*x + 24*y + 2052;
+    int32_t t = (1*(int32_t)x + 4*(int32_t)y + 18) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_56(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 17*x2 + 15*y2 + 3*xy + 21*x + 8*y + 2089;
+    int32_t t = (4*(int32_t)x + 9*(int32_t)y + 8) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_57(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 3*x2 + 1*y2 + 10*xy + 9*x + 21*y + 2126;
+    int32_t t = (7*(int32_t)x + 14*(int32_t)y + 15) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_58(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 6*x2 + 6*y2 + 4*xy + 20*x + 5*y + 2163;
+    int32_t t = (10*(int32_t)x + 6*(int32_t)y + 22) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_59(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 9*x2 + 11*y2 + 11*xy + 8*x + 18*y + 2200;
+    int32_t t = (2*(int32_t)x + 11*(int32_t)y + 12) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_60(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 12*x2 + 16*y2 + 5*xy + 19*x + 31*y + 2237;
+    int32_t t = (5*(int32_t)x + 3*(int32_t)y + 19) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_61(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 15*x2 + 2*y2 + 12*xy + 7*x + 15*y + 2274;
+    int32_t t = (8*(int32_t)x + 8*(int32_t)y + 9) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_62(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 18*x2 + 7*y2 + 6*xy + 18*x + 28*y + 2311;
+    int32_t t = (11*(int32_t)x + 13*(int32_t)y + 16) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
+
+__attribute__((noinline, used))
+static uint32_t poly_63(uint32_t x, uint32_t y, int32_t s){
+    uint32_t x2 = x*x;
+    uint32_t y2 = y*y;
+    uint32_t xy = x*y;
+    uint32_t z = 4*x2 + 12*y2 + 13*xy + 6*x + 12*y + 2348;
+    int32_t t = (3*(int32_t)x + 5*(int32_t)y + 23) * s;
+    z += (uint32_t)t;
+    __asm__ volatile ("" : "+r"(z));
+    return z;
+}
 
 __attribute__((noinline))
 unsigned char run_workload(int verbose){
@@ -442,7 +1000,56 @@ unsigned char run_workload(int verbose){
             z += poly_16(x, y, sine_lut[(2*x + 7*y + 176) & 255]);
             z += poly_17(x, y, sine_lut[(3*x + 9*y + 187) & 255]);
             z += poly_18(x, y, sine_lut[(4*x + 4*y + 198) & 255]);
-
+            // FIRST 19 POLYNOMIALS GIVES OPTIMAL PERFORMANCE
+            // DO NOT UNCOMMENT THE REMAININING POLYNOMIALS
+            // However, keeping the definitions for poly_19 through poly_63 above
+            // offsets the assembly in a way such that non-associative cache will struggle
+            // (found through testing). 
+/*          z += poly_19(x, y, sine_lut[(5*x + 6*y + 209) & 255]);
+            z += poly_20(x, y, sine_lut[(1*x + 8*y + 220) & 255]);
+            z += poly_21(x, y, sine_lut[(2*x + 3*y + 231) & 255]);
+            z += poly_22(x, y, sine_lut[(3*x + 5*y + 242) & 255]);
+            z += poly_23(x, y, sine_lut[(4*x + 7*y + 253) & 255]);
+            z += poly_24(x, y, sine_lut[(5*x + 9*y + 264) & 255]);
+            z += poly_25(x, y, sine_lut[(1*x + 4*y + 275) & 255]);
+            z += poly_26(x, y, sine_lut[(2*x + 6*y + 286) & 255]);
+            z += poly_27(x, y, sine_lut[(3*x + 8*y + 297) & 255]);
+            z += poly_28(x, y, sine_lut[(4*x + 3*y + 308) & 255]);
+            z += poly_29(x, y, sine_lut[(5*x + 5*y + 319) & 255]);
+            z += poly_30(x, y, sine_lut[(1*x + 7*y + 330) & 255]);
+            z += poly_31(x, y, sine_lut[(2*x + 9*y + 341) & 255]);
+            z += poly_32(x, y, sine_lut[(3*x + 4*y + 352) & 255]);
+            z += poly_33(x, y, sine_lut[(4*x + 6*y + 363) & 255]);
+            z += poly_34(x, y, sine_lut[(5*x + 8*y + 374) & 255]);
+            z += poly_35(x, y, sine_lut[(1*x + 3*y + 385) & 255]);
+            z += poly_36(x, y, sine_lut[(2*x + 5*y + 396) & 255]);
+            z += poly_37(x, y, sine_lut[(3*x + 7*y + 407) & 255]);
+            z += poly_38(x, y, sine_lut[(4*x + 9*y + 418) & 255]);
+            z += poly_39(x, y, sine_lut[(5*x + 4*y + 429) & 255]);
+            z += poly_40(x, y, sine_lut[(1*x + 6*y + 440) & 255]);
+            z += poly_41(x, y, sine_lut[(2*x + 8*y + 451) & 255]);
+            z += poly_42(x, y, sine_lut[(3*x + 3*y + 462) & 255]);
+            z += poly_43(x, y, sine_lut[(4*x + 5*y + 473) & 255]);
+            z += poly_44(x, y, sine_lut[(5*x + 7*y + 484) & 255]);
+            z += poly_45(x, y, sine_lut[(1*x + 9*y + 495) & 255]);
+            z += poly_46(x, y, sine_lut[(2*x + 4*y + 506) & 255]);
+            z += poly_47(x, y, sine_lut[(3*x + 6*y + 517) & 255]);
+            z += poly_48(x, y, sine_lut[(4*x + 8*y + 528) & 255]);
+            z += poly_49(x, y, sine_lut[(5*x + 3*y + 539) & 255]);
+            z += poly_50(x, y, sine_lut[(1*x + 5*y + 550) & 255]);
+            z += poly_51(x, y, sine_lut[(2*x + 7*y + 561) & 255]);
+            z += poly_52(x, y, sine_lut[(3*x + 9*y + 572) & 255]);
+            z += poly_53(x, y, sine_lut[(4*x + 4*y + 583) & 255]);
+            z += poly_54(x, y, sine_lut[(5*x + 6*y + 594) & 255]);
+            z += poly_55(x, y, sine_lut[(1*x + 8*y + 605) & 255]);
+            z += poly_56(x, y, sine_lut[(2*x + 3*y + 616) & 255]);
+            z += poly_57(x, y, sine_lut[(3*x + 5*y + 627) & 255]);
+            z += poly_58(x, y, sine_lut[(4*x + 7*y + 638) & 255]);
+            z += poly_59(x, y, sine_lut[(5*x + 9*y + 649) & 255]);
+            z += poly_60(x, y, sine_lut[(1*x + 4*y + 660) & 255]);
+            z += poly_61(x, y, sine_lut[(2*x + 6*y + 671) & 255]);
+            z += poly_62(x, y, sine_lut[(3*x + 8*y + 682) & 255]);
+            z += poly_63(x, y, sine_lut[(4*x + 3*y + 693) & 255]);*/
 
             /* Compiler barrier: keeps the computation as an actual loop. */
             __asm__ volatile ("" : "+r"(z), "+r"(acc));
@@ -460,7 +1067,7 @@ unsigned char run_workload(int verbose){
         putchar('\n');
     }
 
-    return (unsigned char)acc; // expected 0x32
+    return (unsigned char)acc; // expected 0x9b
 }
 
 unsigned char run_workload_timed(){
@@ -493,7 +1100,7 @@ void main(){
 	run_workload_timed();
 
 	while (1) {
-		reg_7seg = run_workload(0);     // expected byte value: 0x32
+		reg_7seg = run_workload(0);     // expected byte value: 0x9b
 		reg_leds = leds_value;
 		leds_value = leds_value ^ 0x02;
 	}
