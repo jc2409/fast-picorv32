@@ -1285,7 +1285,7 @@ module icache_multiword_lookahead #(
 
 endmodule
 
-/*
+/***************************************************************************************************************
     ASSOCIATIVE CACHE
     (e.g. can do 64 sets, 2 ways per set, same 16 words per line)
     Strictly equal or better CPI-wise to the direct mapped version, the only 
