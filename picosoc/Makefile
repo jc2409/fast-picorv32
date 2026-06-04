@@ -174,14 +174,19 @@ icache_tb_dm.vvp: icache_tb.v icache.v
 icache_tb_2way.vvp: icache_tb.v icache.v
 	iverilog -g2012 -o $@ -s tb_2way $^
 
-icache_test: icache_tb_dm.vvp icache_tb_2way.vvp
+# 2-way at equal capacity to tb_dm (half the LINES) -> isolates associativity
+icache_tb_2way_eqcap.vvp: icache_tb.v icache.v
+	iverilog -g2012 -o $@ -s tb_2way_eqcap $^
+
+icache_test: icache_tb_dm.vvp icache_tb_2way.vvp icache_tb_2way_eqcap.vvp
 	vvp -N icache_tb_dm.vvp
 	vvp -N icache_tb_2way.vvp
+	vvp -N icache_tb_2way_eqcap.vvp
 
 # ---- Clean ----
 
 clean:
-	rm -f icache_tb_dm.vvp icache_tb_2way.vvp icache_tb.vcd
+	rm -f icache_tb_dm.vvp icache_tb_2way.vvp icache_tb_2way_eqcap.vvp icache_tb.vcd
 	rm -f testbench.vvp testbench.vcd spiflash_tb.vvp spiflash_tb.vcd
 	rm -f hx8kdemo_fw.elf hx8kdemo_fw.hex hx8kdemo_fw.bin cmos.log
 	rm -f icebreaker_fw.elf icebreaker_fw.hex icebreaker_fw.bin

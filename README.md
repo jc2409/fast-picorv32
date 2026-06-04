@@ -336,14 +336,37 @@ All checks pass for both blocks (Icarus Verilog 14.0, oss-cad-suite):
 | `icache_tb` direct-mapped | directed + 2000 random × 2 latencies  | **PASS** |
 | `icache_tb` 2-way LRU     | directed + 2000 random × 2 latencies  | **PASS** |
 
-The random stream also gives a concrete read on the associativity win — on the
-*same* 2000-fetch sequence the 2-way cache services far more hits than the
-direct-mapped one, confirming it removes conflict misses:
+#### Capacity vs. associativity (a note on a fair comparison)
 
-| Cache (8 sets × 4 words) | Hits / 2000 (latency 1) |
-| ------------------------ | ----------------------: |
-| direct-mapped            | 246                     |
-| 2-way set-associative    | 479                     |
+`make icache_test` also runs a 2000-fetch random stream and reports the hit
+rate. It is tempting to read the direct-mapped vs 2-way numbers as "associativity
+helps," but **`LINES` means different things for the two modules**: for the 2-way
+cache it is the number of sets *per way*, so the same `LINES` gives the 2-way
+cache **twice the total capacity**. The testbench therefore runs three configs —
+direct-mapped, 2-way at equal `LINES` (2× capacity), and 2-way at equal capacity
+(half the `LINES`):
+
+| Config (same random stream, latency 1) | Capacity | Hits / 2000 | Hit rate |
+| --------------------------------------- | -------- | ----------: | -------: |
+| direct-mapped, `LINES=8`                | 32 words | 246         | 12.3%    |
+| 2-way, `LINES=8` (equal `LINES`)        | 64 words | 479         | 23.9%    |
+| 2-way, `LINES=4` (equal capacity)       | 32 words | 237         | 11.8%    |
+
+Two takeaways:
+
+1. The headline ~2× hit rate at equal `LINES` is a **capacity** effect (twice the
+   storage), *not* associativity.
+2. At **equal capacity**, on a *uniformly random* address stream the two are
+   essentially tied (12.3% vs 11.8%) — associativity only pays off when there is
+   conflict-miss *structure* to remove (hot lines that collide on the same
+   index), which a structureless random stream does not contain.
+
+So this unit testbench validates **functional correctness** (data + hit/miss vs a
+golden model, including the 2-way LRU) and **capacity scaling** — it is not the
+right vehicle to measure the associativity benefit. That benefit is demonstrated
+on a real benchmark with the cache deliberately undersized (~half the
+instruction hot-loop): there the 2-way cache cuts conflict misses and measures
+**~14% lower CPI** than direct-mapped at the same capacity.
 
 PicoRV32 - A Size-Optimized RISC-V CPU
 ======================================

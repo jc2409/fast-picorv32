@@ -45,6 +45,13 @@ module icache_tb #(
     localparam integer OFF           = WORD_SEL_BITS + 2; // index LSB position
     localparam integer TAGSHIFT      = OFF + IDX_BITS;    // tag LSB position
 
+    // Total cache data capacity in words. The 2-way cache holds two ways, so
+    // for the *same* LINES it stores 2x the data of the direct-mapped cache.
+    // To compare associativity at equal capacity, give the 2-way cache half
+    // the LINES of the direct-mapped one (see the tb_* wrappers below).
+    localparam integer CAP_WORDS  = (ASSOC ? 2 : 1) * LINES * WORDS_PER_LINE;
+    localparam integer CAP_LINES  = (ASSOC ? 2 : 1) * LINES;
+
     // ---- clock / reset ----------------------------------------------------
     reg clk = 1'b0;
     always #5 clk = ~clk;        // 100 MHz
@@ -452,7 +459,10 @@ module icache_tb #(
                 a = ($random & 32'h3FC); // word-aligned, 0..0x3FC (8x cache size)
                 do_fetch(a);
             end
-            $display("  ok  random %0d fetches: hits=%0d misses=%0d", n, hits, misses);
+            $display("  ok  random %0d fetches: hits=%0d misses=%0d  hit-rate=%0d.%0d%%  [cap=%0d words / %0d lines]",
+                     n, hits, misses,
+                     (hits * 100) / n, ((hits * 1000) / n) % 10,
+                     CAP_WORDS, CAP_LINES);
         end
     endtask
 
@@ -475,8 +485,9 @@ module icache_tb #(
             $dumpfile("icache_tb.vcd");
             $dumpvars(0, icache_tb);
         end
-        $display("==== icache_tb : %s, LINES=%0d WORDS_PER_LINE=%0d ====",
-                 ASSOC ? "2-way assoc" : "direct-mapped", LINES, WORDS_PER_LINE);
+        $display("==== icache_tb : %s, LINES=%0d WORDS_PER_LINE=%0d  -> capacity %0d words (%0d lines) ====",
+                 ASSOC ? "2-way assoc" : "direct-mapped", LINES, WORDS_PER_LINE,
+                 CAP_WORDS, CAP_LINES);
         mem_init;
 
         mem_latency = 1;
@@ -510,5 +521,12 @@ module tb_dm;
 endmodule
 
 module tb_2way;
-    icache_tb #(.ASSOC(1)) u();
+    icache_tb #(.ASSOC(1)) u();   // LINES=8 -> 16 lines, 64 words (2x the DM capacity)
+endmodule
+
+// Equal-capacity 2-way: half the LINES (4 sets x 2 ways = 8 lines, 32 words),
+// matching tb_dm's direct-mapped capacity exactly. Comparing tb_dm vs this
+// isolates the associativity benefit from the cache-size benefit.
+module tb_2way_eqcap;
+    icache_tb #(.ASSOC(1), .LINES(4)) u();
 endmodule
