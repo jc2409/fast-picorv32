@@ -51,7 +51,7 @@ module icebreaker (
 	parameter integer USE_CLK_DIVIDER = 0;
 
 	// Overclock: the 12 MHz crystal arrives on the pad `clk_in`. The PLL
-	// multiplies it to 28.125 MHz and we name that output `clk`, so every
+	// multiplies it and we name that output `clk`, so every
 	// existing reference downstream (reset, 7-seg, gpio, picosoc) keeps
 	// running off `clk` unchanged -- the PLL is inserted transparently
 	// between the pad and the SoC. We *can't* call the pad `clk`: SB_PLL40_PAD
@@ -63,7 +63,7 @@ module icebreaker (
 	SB_PLL40_PAD #(
 		.FEEDBACK_PATH("SIMPLE"),
 		.DIVR(4'd0),       
-		.DIVF(7'd49),     //18.75 MHz
+		.DIVF(7'd75),     // 28.5 MHz!!
 		.DIVQ(3'd5),       
 		.FILTER_RANGE(3'b001)
 	) pll (

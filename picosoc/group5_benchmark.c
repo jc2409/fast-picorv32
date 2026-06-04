@@ -141,7 +141,7 @@ void print_dec(uint32_t v){ // works up to 999 only
 }
 
 void setup_picosoc(void){
-	reg_uart_clkdiv = 163; //163; // Baud ~= 115200 for 12 MHz
+	reg_uart_clkdiv = 250; //163; // Baud ~= 115200 for 12 MHz
 	reg_7seg = 0x02;       // represents Demo 02
 	reg_leds = 0x00;
 	set_flash_qspi_flag();
