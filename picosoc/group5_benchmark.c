@@ -155,16 +155,13 @@ void setup_picosoc(void){
 //   sum over x,y of many small polynomial kernels.
 //   Some polynomial terms are multiplied by values from a sine LUT.
 //
-// Design intent:
-//   The hot instruction footprint is deliberately large: 64 distinct
-//   noinline kernels plus an explicitly duplicated call site.
-//   This should fit a 64-set, 2-way, 16-word-line I-cache much better
-//   than materially smaller caches, while keeping the code simple C.
-//
-// With NX=64, NY=64:
-//   returned unsigned char should be 0x32
-//
-// Unsigned overflow in acc is intentional and deterministic.
+// Justification:
+//   The hot instruction footprint is deliberately large to fill our large cache
+//   (which is largest clean power of 2 cache that will fit on the BRAM)
+//   We use sine_lut for a lot of lw instructions (take advantage of
+//   dmem lookahead)
+//   This particular combination also has set-associative cache
+//   beating direct-mapped cache by a lot.
 
 #define NX 48
 #define NY 48
