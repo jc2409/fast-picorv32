@@ -61,7 +61,7 @@ Note that the cache-too-small case achieves worse CPI of ~13.5 than no cache at 
 Latest Cache + Data Memory Lookahead Buffer Benchmark Data
 ==========================================================
 
-<img width="1477" height="408" alt="image" src="https://github.com/user-attachments/assets/ecb8ae2f-2793-4dda-b972-ffbb99b73a29" />
+<img width="1589" height="713" alt="image" src="https://github.com/user-attachments/assets/fafd8878-4465-43d9-9f93-4df3258f428a" />
 
 The multiword cache (with 1-cycle BRAM access) was iteratively built upon.
 
