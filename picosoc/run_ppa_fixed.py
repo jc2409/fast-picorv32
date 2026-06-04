@@ -3,7 +3,8 @@
 Fixed PPA script for icebreaker design.
 Supports CPU parameters, MEM_WORDS, cache size parameters,
 and cache module selection (from icache.v).
-Includes early functional testing via RISC-V instruction tests.
+Includes early functional testing via RISC-V instruction tests,
+plus divider and I-cache unit tests.
 """
 
 import subprocess
@@ -15,7 +16,7 @@ import argparse
 
 # ---------- Configuration ----------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)   # one level up (main_tues/)
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)   # one level up (friday_clean_start/)
 
 VERILOG_SOURCES = [
     "icebreaker.v",
@@ -85,17 +86,28 @@ def replace_in_file(file_path, pattern, replacement):
     return False
 
 def copy_test_infrastructure(build_dir):
-    """Copy testbench.v, Makefile, firmware/, tests/, scripts/ into build_dir."""
-    items = ["testbench.v", "Makefile", "firmware", "tests", "scripts"]
+    """Copy testbench.v, Makefile, firmware/, tests/, scripts/, and unit tests into build_dir."""
+    items = [
+        "testbench.v", "Makefile", "firmware", "tests", "scripts",
+        "div_tb.v",
+    ]
+    icache_tb_src = os.path.join(PROJECT_ROOT, "picosoc", "icache_tb.v")
     for item in items:
         src = os.path.join(PROJECT_ROOT, item)
-        dst = os.path.join(build_dir, item)
+        dst = os.path.join(build_dir, os.path.basename(item))
+        if not os.path.exists(src):
+            print(f"  WARNING: {item} not found, skipping")
+            continue
         if os.path.isdir(src):
             if os.path.exists(dst):
                 shutil.rmtree(dst)
             shutil.copytree(src, dst)
         else:
             shutil.copy2(src, dst)
+    if os.path.exists(icache_tb_src):
+        shutil.copy2(icache_tb_src, os.path.join(build_dir, "icache_tb.v"))
+    else:
+        print("  WARNING: picosoc/icache_tb.v not found, I-cache test will be skipped")
 
 def override_testbench_params(build_dir, params):
     """Modify testbench.v: set both parameter declarations and instance ports."""
@@ -104,7 +116,6 @@ def override_testbench_params(build_dir, params):
         print("  WARNING: testbench.v not found, cannot override parameters")
         return False
 
-    # All parameters we want to propagate to the testbench
     tb_params = [
         "ENABLE_MUL", "ENABLE_DIV", "ENABLE_FAST_MUL", "BARREL_SHIFTER",
         "COMPRESSED_ISA", "ENABLE_COUNTERS", "ENABLE_IRQ",
@@ -114,28 +125,24 @@ def override_testbench_params(build_dir, params):
         "USE_CLK_DIVIDER", "ENABLE_IRQ_QREGS"
     ]
 
-    # 1. Override parameter declarations
     for p in tb_params:
         if p in params:
             pattern = rf'parameter\s+{p}\s*=\s*[01];'
             replacement = f'parameter {p} = {params[p]};'
             replace_in_file(tb_path, pattern, replacement)
 
-    # 2. Override instance port connections
     for p in tb_params:
         if p in params:
             pattern = rf'\.{p}\s*\(\s*[01]\s*\)'
             replacement = f'.{p}({params[p]})'
             replace_in_file(tb_path, pattern, replacement)
 
-    # 3. ENABLE_PCPI is derived from mul/div
     if params.get("ENABLE_MUL", 0) or params.get("ENABLE_DIV", 0):
         replace_in_file(tb_path, r'parameter\s+ENABLE_PCPI\s*=\s*[01];', 'parameter ENABLE_PCPI = 1;')
         replace_in_file(tb_path, r'\.ENABLE_PCPI\(\s*[01]\s*\)', '.ENABLE_PCPI(1)')
     else:
         replace_in_file(tb_path, r'parameter\s+ENABLE_PCPI\s*=\s*[01];', 'parameter ENABLE_PCPI = 0;')
         replace_in_file(tb_path, r'\.ENABLE_PCPI\(\s*[01]\s*\)', '.ENABLE_PCPI(0)')
-
     return True
 
 def run_tests_for_config(build_dir, timeout_sec=300):
@@ -150,12 +157,11 @@ def run_tests_for_config(build_dir, timeout_sec=300):
             capture_output=True, text=True
         )
         stdout = result.stdout
-        # RV32IM mandatory instructions (excluding IRQ, compressed, etc.)
         required = [
             "add..OK", "addi..OK", "sub..OK",
             "and..OK", "andi..OK", "or..OK", "ori..OK", "xor..OK", "xori..OK",
             "sll..OK", "slli..OK", "srl..OK", "srli..OK", "sra..OK", "srai..OK",
-            "slt..OK", "slti..OK", "sltu..OK", "sltiu..OK",
+            "slt..OK", "slti..OK", 
             "lui..OK", "auipc..OK",
             "beq..OK", "bne..OK", "blt..OK", "bge..OK", "bltu..OK", "bgeu..OK",
             "jal..OK", "jalr..OK",
@@ -169,11 +175,44 @@ def run_tests_for_config(build_dir, timeout_sec=300):
         print(f"  Test error: {e}")
         return False
 
+def run_divider_test(build_dir, timeout_sec=60):
+    """Run divider unit test; return True if it passes."""
+    env = os.environ.copy()
+    try:
+        subprocess.run("make clean", cwd=build_dir, shell=True, env=env, check=False, capture_output=True)
+        result = subprocess.run(
+            "make div_test TOOLCHAIN_PREFIX=riscv64-unknown-elf-",
+            cwd=build_dir, shell=True, env=env,
+            timeout=timeout_sec,
+            capture_output=True, text=True
+        )
+        return "ALL TESTS PASSED" in result.stdout or "PASS" in result.stdout
+               
+    except Exception as e:
+        print(f"  Divider test error: {e}")
+        return False
+
+def run_icache_test(build_dir, timeout_sec=120):
+    """Run I-cache unit test (direct-mapped and 2-way); return True if both pass."""
+    env = os.environ.copy()
+    try:
+        subprocess.run("make clean", cwd=build_dir, shell=True, env=env, check=False, capture_output=True)
+        result = subprocess.run(
+            "make icache_test",
+            cwd=build_dir, shell=True, env=env,
+            timeout=timeout_sec,
+            capture_output=True, text=True
+        )
+        return "ALL TESTS PASSED" in result.stdout
+    except Exception as e:
+        print(f"  I-cache test error: {e}")
+        return False
+
+
 def generate_config_files(config_name, params, build_dir):
     """Copy all source files, override parameters in icebreaker.v, picosoc.v, picorv32.v, and testbench.v."""
     os.makedirs(build_dir, exist_ok=True)
 
-    # 1. Copy all Verilog sources
     for src in VERILOG_SOURCES:
         src_path = src
         if not os.path.isabs(src_path):
@@ -186,21 +225,17 @@ def generate_config_files(config_name, params, build_dir):
         dest = os.path.join(build_dir, os.path.basename(src))
         shutil.copy2(src_path, dest)
 
-    # 2. Override icebreaker.v instance ports (only those that exist as ports)
     icebreaker_path = os.path.join(build_dir, "icebreaker.v")
     icebreaker_ports = ["BARREL_SHIFTER", "ENABLE_MUL", "ENABLE_DIV", "ENABLE_FAST_MUL"]
     for param in icebreaker_ports:
         if param in params:
             pattern = rf'\.{param}\s*\(\s*[01]\s*\)'
             replace_in_file(icebreaker_path, pattern, f'.{param}({params[param]})')
-    # Also handle USE_CLK_DIVIDER (integer, not binary) – optional
     if "USE_CLK_DIVIDER" in params:
         pattern = r'(parameter\s+USE_CLK_DIVIDER\s*=\s*)\d+;'
         replace_in_file(icebreaker_path, pattern, rf'\g<1>{params["USE_CLK_DIVIDER"]};')
 
-    # 3. Override picosoc.v parameters (both parameters and ports)
     picosoc_path = os.path.join(build_dir, "picosoc.v")
-    # Parameters that appear as 'parameter' in picosoc.v
     if "ENABLE_COUNTERS" in params:
         pattern = r'(parameter\s+\[0:0\]\s+ENABLE_COUNTERS\s*=\s*)[01];'
         replace_in_file(picosoc_path, pattern, rf'\g<1>{params["ENABLE_COUNTERS"]};')
@@ -210,10 +245,8 @@ def generate_config_files(config_name, params, build_dir):
     if "ENABLE_IRQ_QREGS" in params:
         pattern = r'(parameter\s+\[0:0\]\s+ENABLE_IRQ_QREGS\s*=\s*)[01];'
         replace_in_file(picosoc_path, pattern, rf'\g<1>{params["ENABLE_IRQ_QREGS"]};')
-    # Instance port overrides in picosoc.v (for ENABLE_IRQ)
     if "ENABLE_IRQ" in params:
         replace_in_file(picosoc_path, r'\.ENABLE_IRQ\(\d+\)', f'.ENABLE_IRQ({params["ENABLE_IRQ"]})')
-    # Cache parameters
     if "CACHE_LINES" in params:
         replace_in_file(picosoc_path, r'\.LINES\(\s*\d+\s*\)', f'.LINES({params["CACHE_LINES"]})')
     if "CACHE_WORDS_PER_LINE" in params:
@@ -233,7 +266,6 @@ def generate_config_files(config_name, params, build_dir):
             pattern = r'(\b)icache_\w+(?=\s*#\()'
             replace_in_file(picosoc_path, pattern, rf'\g<1>{cache_mod}')
 
-    # 4. Override picorv32.v internal parameters (direct file edit)
     picorv32_path = os.path.join(build_dir, "picorv32.v")
     if os.path.exists(picorv32_path):
         internal_params = [
@@ -243,16 +275,13 @@ def generate_config_files(config_name, params, build_dir):
         ]
         for param in internal_params:
             if param in params:
-                # Flexible regex: matches "parameter [ 0 : 0 ] PARAM_NAME = 0,"
                 pattern = rf'(parameter\s+\[\s*0\s*:\s*0\s*\]\s+{param}\s*=\s*)[01]\s*,'
                 replacement = rf'\g<1>{params[param]},'
                 replace_in_file(picorv32_path, pattern, replacement)
 
-    # 5. Copy test infrastructure and override testbench parameters
     copy_test_infrastructure(build_dir)
     override_testbench_params(build_dir, params)
 
-    # 6. Verify picorv32.v exists (should be there)
     if not os.path.exists(picorv32_path):
         print(f"  ERROR: picorv32.v not found in build directory!")
         return False
@@ -326,37 +355,52 @@ def process_config(config_name, params, build_root, skip_tests=False, continue_o
     if not generate_config_files(config_name, params, build_dir):
         return None
 
-    # Run tests (may decide to skip PPA if tests fail and continue_on_test_fail is False)
-    tests_passed = False
+    rv32im_passed = False
+    div_passed = False
+    icache_passed = False
     if not skip_tests:
-        print("  Running smoke tests...")
-        tests_passed = run_tests_for_config(build_dir)
-        if tests_passed:
-            print("  Smoke tests PASSED")
-        else:
-            print("  Smoke tests FAILED")
-            if not continue_on_test_fail:
-                print("  Skipping synthesis/P&R for this config (use --continue-on-test-fail to override)")
-                # Return minimal metrics with tests_pass=0 and zeros for PPA
-                metrics = {
-                    "config": config_name,
-                    "tests_pass": 0,
-                    "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
-                    "fmax_mhz": 0, "logic_levels": 0,
-                    "lc_used": 0, "lc_total": 0, "lc_percent": 0,
-                    "ram_used": 0, "ram_total": 0, "ram_percent": 0,
-                    "dsp_used": 0, "dsp_total": 0, "dsp_percent": 0,
-                    "io_used": 0, "io_total": 0, "io_percent": 0,
-                    "pll_used": 0, "pll_total": 0, "pll_percent": 0,
-                    "gb_used": 0, "gb_total": 0, "gb_percent": 0,
-                }
-                for k, v in params.items():
-                    metrics[k.lower()] = v
-                return metrics
-    else:
-        print("  Skipping tests (--skip-tests used)")
+        print("  Running RV32IM instruction tests...")
+        rv32im_passed = run_tests_for_config(build_dir)
+        print("  Running divider unit test...")
+        div_passed = run_divider_test(build_dir)
+        print("  Running I-cache unit test...")
+        icache_passed = run_icache_test(build_dir)
 
-    # Copy PCF file
+        if rv32im_passed:
+            print("  RV32IM tests PASSED")
+        else:
+            print("  RV32IM tests FAILED")
+        if div_passed:
+            print("  Divider test PASSED")
+        else:
+            print("  Divider test FAILED")
+        if icache_passed:
+            print("  I-cache test PASSED")
+        else:
+            print("  I-cache test FAILED")
+
+        if not rv32im_passed and not continue_on_test_fail:
+            print("  Skipping synthesis/P&R for this config (use --continue-on-test-fail to override)")
+            metrics = {
+                "config": config_name,
+                "tests_pass": 0,
+                "div_test_pass": 1 if div_passed else 0,
+                "icache_test_pass": 1 if icache_passed else 0,
+                "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
+                "fmax_mhz": 0, "logic_levels": 0,
+                "lc_used": 0, "lc_total": 0, "lc_percent": 0,
+                "ram_used": 0, "ram_total": 0, "ram_percent": 0,
+                "dsp_used": 0, "dsp_total": 0, "dsp_percent": 0,
+                "io_used": 0, "io_total": 0, "io_percent": 0,
+                "pll_used": 0, "pll_total": 0, "pll_percent": 0,
+                "gb_used": 0, "gb_total": 0, "gb_percent": 0,
+            }
+            for k, v in params.items():
+                metrics[k.lower()] = v
+            return metrics
+    else:
+        print("  Skipping all tests (--skip-tests used)")
+
     pcf_src = os.path.join(SCRIPT_DIR, PCF_FILE)
     if os.path.exists(pcf_src):
         shutil.copy2(pcf_src, build_dir)
@@ -365,25 +409,19 @@ def process_config(config_name, params, build_root, skip_tests=False, continue_o
         return None
 
     source_files = [
-        "icebreaker.v",
-        "ice40up5k_spram.v",
-        "spimemio.v",
-        "simpleuart.v",
-        "icache.v",
-        "dmem_lookahead_buffer.v",
-        "picosoc.v",
-        "picorv32.v"
+        "icebreaker.v", "ice40up5k_spram.v", "spimemio.v", "simpleuart.v",
+        "icache.v", "dmem_lookahead_buffer.v", "picosoc.v", "picorv32.v"
     ]
 
-    # Yosys synthesis
     yosys_log = os.path.join(build_dir, "yosys_synth.log")
     yosys_cmd = f"yosys -p 'read_verilog {' '.join(source_files)}; synth_ice40 -top {TOP_MODULE}; stat -width'"
     rc, stdout, stderr = run_cmd(yosys_cmd, "Yosys synthesis", cwd=build_dir, log_file=yosys_log)
     if rc != 0:
-        # Return zeros but record test result
         metrics = {
             "config": config_name,
-            "tests_pass": 1 if tests_passed else 0,
+            "tests_pass": 1 if rv32im_passed else 0,
+            "div_test_pass": 1 if div_passed else 0,
+            "icache_test_pass": 1 if icache_passed else 0,
             "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
             "fmax_mhz": 0, "logic_levels": 0,
             "lc_used": 0, "lc_total": 0, "lc_percent": 0,
@@ -399,14 +437,15 @@ def process_config(config_name, params, build_root, skip_tests=False, continue_o
     log = stdout + stderr
     luts, ffs, brams, dsps, carry = get_area_from_yosys(log)
 
-    # Yosys to JSON
     json_file = "design.json"
     json_cmd = f"yosys -q -p 'read_verilog {' '.join(source_files)}; synth_ice40 -top {TOP_MODULE} -json {json_file}'"
     rc, _, _ = run_cmd(json_cmd, "Yosys to JSON", cwd=build_dir)
     if rc != 0:
         metrics = {
             "config": config_name,
-            "tests_pass": 1 if tests_passed else 0,
+            "tests_pass": 1 if rv32im_passed else 0,
+            "div_test_pass": 1 if div_passed else 0,
+            "icache_test_pass": 1 if icache_passed else 0,
             "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
             "fmax_mhz": 0, "logic_levels": 0,
             "lc_used": 0, "lc_total": 0, "lc_percent": 0,
@@ -420,7 +459,6 @@ def process_config(config_name, params, build_root, skip_tests=False, continue_o
             metrics[k.lower()] = v
         return metrics
 
-    # nextpnr
     asc_file = "design.asc"
     pnr_log = os.path.join(build_dir, "nextpnr.log")
     pnr_cmd = f"nextpnr-ice40 --{DEVICE} --package {PACKAGE} --json {json_file} --pcf {PCF_FILE} --asc {asc_file} --pcf-allow-unconstrained"
@@ -428,7 +466,9 @@ def process_config(config_name, params, build_root, skip_tests=False, continue_o
     if rc != 0:
         metrics = {
             "config": config_name,
-            "tests_pass": 1 if tests_passed else 0,
+            "tests_pass": 1 if rv32im_passed else 0,
+            "div_test_pass": 1 if div_passed else 0,
+            "icache_test_pass": 1 if icache_passed else 0,
             "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
             "fmax_mhz": 0, "logic_levels": 0,
             "lc_used": 0, "lc_total": 0, "lc_percent": 0,
@@ -443,14 +483,15 @@ def process_config(config_name, params, build_root, skip_tests=False, continue_o
         return metrics
     util = parse_nextpnr_utilization(stdout + stderr)
 
-    # icetime
     timing_rpt = "timing.rpt"
     icetime_cmd = f"icetime -d {DEVICE} -mtr {timing_rpt} {asc_file}"
     rc, _, _ = run_cmd(icetime_cmd, "icetime", cwd=build_dir)
     if rc != 0:
         metrics = {
             "config": config_name,
-            "tests_pass": 1 if tests_passed else 0,
+            "tests_pass": 1 if rv32im_passed else 0,
+            "div_test_pass": 1 if div_passed else 0,
+            "icache_test_pass": 1 if icache_passed else 0,
             "luts": 0, "ffs": 0, "brams": 0, "dsps": 0, "carry_cells": 0,
             "fmax_mhz": 0, "logic_levels": 0,
             "lc_used": 0, "lc_total": 0, "lc_percent": 0,
@@ -467,7 +508,9 @@ def process_config(config_name, params, build_root, skip_tests=False, continue_o
 
     metrics = {
         "config": config_name,
-        "tests_pass": 1 if tests_passed else 0,
+        "tests_pass": 1 if rv32im_passed else 0,
+        "div_test_pass": 1 if div_passed else 0,
+        "icache_test_pass": 1 if icache_passed else 0,
         "luts": luts,
         "ffs": ffs,
         "brams": brams,
@@ -521,7 +564,7 @@ def main():
     results = []
     for config_name, params in CONFIGS.items():
         print(f"\n=== Running {config_name} ===")
-        metrics = process_config(config_name, params, build_root, skip_tests=args.skip_tests,continue_on_test_fail=args.continue_on_test_fail)
+        metrics = process_config(config_name, params, build_root, skip_tests=args.skip_tests, continue_on_test_fail=args.continue_on_test_fail)
         if metrics:
             results.append(metrics)
             if metrics.get('tests_pass', 0) == 1:

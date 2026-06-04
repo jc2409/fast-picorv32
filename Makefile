@@ -24,14 +24,6 @@ GIT_ENV = true
 test: testbench.vvp firmware/firmware.hex
 	$(VVP) -N $<
 
-# ---- compact divider unit testbench (self-checking) ----
-div_test: div_tb.vvp
-	$(VVP) -N $<
-
-div_tb.vvp: div_tb.v picorv32.v
-	$(IVERILOG) -g2012 -o $@ -s div_tb $^
-	chmod -x $@
-
 test_vcd: testbench.vvp firmware/firmware.hex
 	$(VVP) -N $< +vcd +trace +noerror
 
@@ -130,6 +122,24 @@ tests/%.o: tests/%.S tests/riscv_test.h tests/test_macros.h
 	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32im -o $@ -DTEST_FUNC_NAME=$(notdir $(basename $<)) \
 		-DTEST_FUNC_TXT='"$(notdir $(basename $<))"' -DTEST_FUNC_RET=$(notdir $(basename $<))_ret $<
 
+# ----- Divider unit test -----
+div_test: div_test.vvp
+	vvp -N div_test.vvp
+
+div_test.vvp: div_tb.v picorv32.v
+	iverilog -g2012 -o $@ -s div_tb $^
+
+# ----- I-cache unit test (direct-mapped and 2-way) -----
+icache_test: icache_tb_dm.vvp icache_tb_2way.vvp
+	vvp -N icache_tb_dm.vvp
+	vvp -N icache_tb_2way.vvp
+
+icache_tb_dm.vvp: icache_tb.v icache.v
+	iverilog -g2012 -o $@ -s tb_dm $^
+
+icache_tb_2way.vvp: icache_tb.v icache.v
+	iverilog -g2012 -o $@ -s tb_2way $^
+
 download-tools:
 	sudo bash -c 'set -ex; mkdir -p /var/cache/distfiles; $(GIT_ENV); \
 	$(foreach REPO,riscv-gnu-toolchain riscv-binutils-gdb riscv-gcc riscv-glibc riscv-newlib, \
@@ -187,7 +197,6 @@ clean:
 		firmware/firmware.elf firmware/firmware.bin firmware/firmware.hex firmware/firmware.map \
 		testbench.vvp testbench_sp.vvp testbench_synth.vvp testbench_ez.vvp \
 		testbench_rvf.vvp testbench_wb.vvp testbench.vcd testbench.trace \
-		testbench_verilator testbench_verilator_dir \
-		div_tb.vvp
+		testbench_verilator testbench_verilator_dir
 
-.PHONY: test div_test test_vcd test_sp test_axi test_wb test_wb_vcd test_ez test_ez_vcd test_synth download-tools build-tools toc clean
+.PHONY: test test_vcd test_sp test_axi test_wb test_wb_vcd test_ez test_ez_vcd test_synth download-tools build-tools toc clean
