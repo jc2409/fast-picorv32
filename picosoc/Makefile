@@ -1,4 +1,4 @@
-CROSS=riscv32-unknown-elf- #default
+CROSS=riscv32-unknown-elf-#default
 #CROSS=/opt/homebrew/opt/riscv-gnu-toolchain/bin/riscv64-unknown-elf- 
 CFLAGS=
 
