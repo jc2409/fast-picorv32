@@ -73,13 +73,13 @@ instruction, which is often around 20-30% of the total number of instructions.
 
 Finally, the cache was made to be associative, with two "ways". See the benchmark design section above for data that highlights how this improves CPI. 
 
-<sub> Note: it's not entirely true that we need to use the cpu memory lookahead interface to achieve zero-cycle hit response. In fact, if, in the Verilog you naively write a combinational circuit using the data_array (ignoring the synchronous nature of the BRAM), synthesis still allows it and uses BRAM because it is very clever. 
+<sub> Note: it's not entirely true that we need to use the cpu memory lookahead interface to achieve zero-cycle hit response. In fact, if, in the Verilog you naively write a combinational circuit using the data_array (ignoring the synchronous nature of the BRAM), synthesis still allows it and uses BRAM because it is very clever. </sub>
 
-Synthesis does not see the wrappers like the cpu module or hierarchical structures - everything is 'see-through' and synthesis can access any net it wants (and only sees the true combinational equations governing the CPU, not the semantic meaning of different signals). So it would find a way to get something equivalent to the lookahead signals from different parts of the CPU design, and still use a BRAM synchronously, achieving the same as what the lookahead version of the cache does! (You can somewhat see how it works if you dig through the json file, but it's not very clear.)
+<sub>Synthesis does not see the wrappers like the cpu module or hierarchical structures - everything is 'see-through' and synthesis can access any net it wants (and only sees the true combinational equations governing the CPU, not the semantic meaning of different signals). So it would find a way to get something equivalent to the lookahead signals from different parts of the CPU design, and still use a BRAM synchronously, achieving the same as what the lookahead version of the cache does! (You can somewhat see how it works if you dig through the json file, but it's not very clear.)</sub>
 
-However, since we are forcing synthesis to be so clever, it finds the required signals in a possibly sub-optimal way, resulting in poor timing. A "naive" cache that tries to use the BRAM combinationally and forcing synthesis to be clever results in poor timing, around 16 MHz. But my cache which explicitly uses the lookahead interface, thereby guiding synthesis in the right direction, achieves better timing of 18-19 MHz! 
+<sub>However, since we are forcing synthesis to be so clever, it finds the required signals in a possibly sub-optimal way, resulting in poor timing. A "naive" cache that tries to use the BRAM combinationally and forcing synthesis to be clever results in poor timing, around 16 MHz. But my cache which explicitly uses the lookahead interface, thereby guiding synthesis in the right direction, achieves better timing of 18-19 MHz! </sub>
 
-This was one of my coolest discoveries when I finally understood what was going on. </sub>
+<sub>This was one of my coolest discoveries when I finally understood what was going on. </sub>
 
 
 Compact Restoring Divider (area reduction)
