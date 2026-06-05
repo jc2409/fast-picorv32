@@ -1,17 +1,15 @@
 `timescale 1 ns / 1 ps
 //
-// div_tb.v  --  self-checking unit testbench for the GB3 compact divider
-//               (picorv32_pcpi_div in picorv32.v).
+// Testbench for the compact divider (picorv32_pcpi_div).
 //
-// The divider is a PCPI coprocessor: drive pcpi_valid + an RV32M div/rem
-// instruction word + the two operands, hold valid until pcpi_ready pulses,
-// then read the result on pcpi_rd.  This TB checks every result against a
-// golden model implementing exact RV32M semantics, including the two special
-// cases the spec mandates:
-//   * divide by zero:  div/divu -> all ones (-1),  rem/remu -> dividend
-//   * signed overflow INT_MIN / -1:  div -> INT_MIN,  rem -> 0
+// It's a PCPI coprocessor, so to run a divide we drive pcpi_valid with the
+// instruction word and the two operands, wait for pcpi_ready, then read
+// pcpi_rd. Every result is compared against the plain reference function
+// (golden) below. The two RV32M corner cases worth remembering:
+//   divide by zero   ->  div/divu give -1,    rem/remu give the dividend
+//   INT_MIN / -1      ->  div gives INT_MIN,   rem gives 0
 //
-// funct3:  100=div  101=divu  110=rem  111=remu   (opcode 0110011, funct7 0000001)
+// funct3: 100 div, 101 divu, 110 rem, 111 remu (opcode 0110011, funct7 0000001)
 //
 module div_tb;
     // ---- clock / reset ----
@@ -42,10 +40,11 @@ module div_tb;
 
     localparam [2:0] F_DIV = 3'b100, F_DIVU = 3'b101, F_REM = 3'b110, F_REMU = 3'b111;
 
-    // golden RV32M reference.
-    // NB: signed division must be done via signed temporaries, NOT inside a
-    // ?: with unsigned branches -- a mixed-sign ternary coerces the whole
-    // expression (operands included) back to unsigned in Verilog.
+    // reference result.
+    // the signed divide has to go through signed temporaries (sa/sb). if you
+    // write it inside a ?: that also has unsigned branches, Verilog makes the
+    // whole expression unsigned and you get the wrong answer - got caught by
+    // this the first time.
     function [31:0] golden;
         input [2:0]  f3;
         input [31:0] a, b;

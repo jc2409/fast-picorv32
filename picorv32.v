@@ -2455,12 +2455,12 @@ module picorv32_pcpi_div (
 	end
 
 	// ---- GB3 compact restoring divider ------------------------------------
-	// Stock module used a 63-bit `divisor` register (pre-shifted left by 31,
-	// shifted right each cycle) and a 32-bit one-hot iteration mask.
-	// This version keeps the divisor at 32 bits and shifts the partial
-	// remainder *left*, with a 6-bit step counter. Same RV32M semantics
-	// (div/divu/rem/remu, div-by-zero and INT_MIN/-1 overflow), same ~33-cycle
-	// latency, but ~104 FF vs ~159 and a 33-bit subtract vs a 63-bit one.
+	// The stock divider held the divisor in a 63-bit register (pre-shifted left
+	// by 31 and shifted right each cycle) plus a 32-bit one-hot mask for the
+	// iteration count. Here the divisor stays 32 bits and we shift the partial
+	// remainder left instead, counting with a 6-bit step. Same results
+	// (div/divu/rem/remu, div-by-zero, INT_MIN/-1) and about the same ~33 cycle
+	// latency, but roughly 104 FF instead of 159 and a 33-bit subtract not 63.
 	reg [31:0] divisor_q;
 	reg [32:0] rem_q;          // 33-bit running remainder (extra bit for the shift)
 	reg [31:0] dq;             // dividend shifts out the top, quotient shifts in the bottom

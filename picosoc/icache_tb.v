@@ -1,37 +1,24 @@
 `timescale 1 ns / 1 ps
 //
-// icache_tb.v  --  self-checking unit testbench for the two shipping I-caches:
+// Testbench for the two instruction caches we actually use:
+//   icache_multiword_lookahead       - direct mapped, multiword line, lookahead
+//   icache_multiword_lookahead_2way  - 2-way, LRU
 //
-//   - icache_multiword_lookahead       (direct-mapped, multiword, lookahead)
-//   - icache_multiword_lookahead_2way  (2-way set-associative, true LRU)
+// Same ports on both. The data sits in block RAM, which has a 1 cycle read, so
+// the cache uses the lookahead port to start the read a cycle early and stashes
+// it in la_cached_*. That's how a hit comes back without stalling. do_fetch()
+// drives that one-cycle-early handshake the same way picorv32 does.
 //
-// Both DUTs share an identical port interface (CPU side + lookahead +
-// memory side).  The caches use *inferred* block RAM whose synchronous
-// 1-cycle read latency is modelled in RTL by registering the lookahead
-// read into la_cached_*.  So this TB is pure Icarus Verilog -- no yosys
-// cells_sim.v is needed.
+// On every fetch we check two things:
+//   1. the data matches our memory model (mem[addr>>2])
+//   2. hit/miss matches a small model that tracks the same tag/valid/LRU state
+//      as the RTL
+// Since the model tracks LRU too, if the cache ever evicts the wrong way it
+// shows up as a hit/miss mismatch a few fetches later.
 //
-// Verification strategy
-// ---------------------
-//  * A behavioural memory model backs every address with a known value and
-//    answers fill bursts after a configurable latency.
-//  * do_fetch() replicates the picorv32 lookahead protocol: it presents the
-//    look-ahead address one cycle *before* the real request (see mem_la_read
-//    / mem_la_addr in picorv32.v), which is exactly what lets the cache flop
-//    the RAM read into la_cached_* in time for a single-cycle hit.
-//  * Every instruction fetch is checked two ways:
-//       (1) returned data must equal mem[addr>>2]   (data correctness)
-//       (2) hit/miss (ready asserted in the request cycle => hit) must match
-//           a golden reference model that mirrors the tag/index/valid/LRU
-//           state of the RTL.
-//  * The reference model's replacement/LRU bookkeeping is identical to the
-//    RTL, so any divergence in *which* way is filled surfaces as a later
-//    hit/miss mismatch.
-//
-// The top module icache_tb is parameterised by ASSOC (0 = direct-mapped,
-// 1 = 2-way).  Two thin wrappers (tb_dm, tb_2way) instantiate it; compile
-// with `-s tb_dm` or `-s tb_2way`.  Each run exercises memory latency 1 and
-// then 3 to stress the fill FSM.
+// ASSOC picks the cache (0 = direct mapped, 1 = 2-way). The wrappers at the
+// bottom (tb_dm / tb_2way / tb_2way_eqcap) set it - build one with -s <name>.
+// Each run goes through memory latency 1 and then 3 to exercise the fill path.
 //
 
 module icache_tb #(
@@ -45,10 +32,9 @@ module icache_tb #(
     localparam integer OFF           = WORD_SEL_BITS + 2; // index LSB position
     localparam integer TAGSHIFT      = OFF + IDX_BITS;    // tag LSB position
 
-    // Total cache data capacity in words. The 2-way cache holds two ways, so
-    // for the *same* LINES it stores 2x the data of the direct-mapped cache.
-    // To compare associativity at equal capacity, give the 2-way cache half
-    // the LINES of the direct-mapped one (see the tb_* wrappers below).
+    // total data the cache holds, in words. the 2-way version has two ways, so
+    // the same LINES gives it twice the storage of the direct-mapped one. to
+    // compare them fairly, give the 2-way half the LINES (see tb_2way_eqcap).
     localparam integer CAP_WORDS  = (ASSOC ? 2 : 1) * LINES * WORDS_PER_LINE;
     localparam integer CAP_LINES  = (ASSOC ? 2 : 1) * LINES;
 
@@ -90,7 +76,7 @@ module icache_tb #(
     reg [31:0] mem [0:MEM_WORDS-1];
     integer    lat;
 
-    // deterministic, address-revealing init so a wrong word is obvious
+    // fill memory with an address-dependent pattern so a wrong word stands out
     task mem_init;
         integer k;
         begin
@@ -195,7 +181,7 @@ module icache_tb #(
         end
     endfunction
 
-    // advance reference state exactly like the RTL does on this access
+    // update the reference the same way the RTL would on this access
     task ref_update;
         input [31:0] a;
         input        was_hit;
@@ -233,7 +219,7 @@ module icache_tb #(
     // Stimulus helpers
     // =======================================================================
 
-    // synchronous reset + reference-model clear (keeps prediction aligned)
+    // reset the DUT and clear the reference model together so they stay in sync
     task do_reset;
         begin
             @(negedge clk);
@@ -258,7 +244,7 @@ module icache_tb #(
         end
     endtask
 
-    // one instruction fetch using the lookahead protocol, fully checked
+    // do one instruction fetch over the lookahead handshake and check it
     task do_fetch;
         input [31:0] addr;
         reg        pred_hit;
@@ -269,7 +255,7 @@ module icache_tb #(
             exp      = mem[addr >> 2];
             pred_hit = ref_predict_hit(addr);
 
-            // --- lookahead cycle: present next address one cycle early ---
+            // cycle 1: put the address on the lookahead port
             @(negedge clk);
             cpu_mem_la_read = 1'b1;
             cpu_mem_la_addr = addr;
@@ -277,16 +263,16 @@ module icache_tb #(
             cpu_mem_instr   = 1'b1;
             cpu_mem_wstrb   = 4'b0;
 
-            // --- request cycle: the real fetch of the same address ---
+            // cycle 2: actually request it
             @(negedge clk);
             cpu_mem_la_read = 1'b0;
             cpu_mem_valid   = 1'b1;
             cpu_mem_addr    = addr;
             #1;
-            meas_hit = (cpu_mem_ready === 1'b1); // combinational => hit
+            meas_hit = (cpu_mem_ready === 1'b1); // ready already high = hit
             if (meas_hit) begin
                 got = cpu_mem_rdata;
-                @(negedge clk);                  // let posedge commit LRU update
+                @(negedge clk);                  // let the posedge update LRU
                 cpu_mem_valid = 1'b0;
             end else begin
                 guard = 0;
@@ -515,18 +501,18 @@ module icache_tb #(
     end
 endmodule
 
-// ---- thin top wrappers: pick one with iverilog -s ------------------------
+// top wrappers - pick one with iverilog -s
 module tb_dm;
     icache_tb #(.ASSOC(0)) u();
 endmodule
 
 module tb_2way;
-    icache_tb #(.ASSOC(1)) u();   // LINES=8 -> 16 lines, 64 words (2x the DM capacity)
+    icache_tb #(.ASSOC(1)) u();   // LINES=8 -> 16 lines / 64 words (2x tb_dm)
 endmodule
 
-// Equal-capacity 2-way: half the LINES (4 sets x 2 ways = 8 lines, 32 words),
-// matching tb_dm's direct-mapped capacity exactly. Comparing tb_dm vs this
-// isolates the associativity benefit from the cache-size benefit.
+// 2-way shrunk to the same capacity as tb_dm: half the LINES (4 sets x 2 ways
+// = 8 lines, 32 words). Use this against tb_dm so the only thing that changes
+// is associativity, not size.
 module tb_2way_eqcap;
     icache_tb #(.ASSOC(1), .LINES(4)) u();
 endmodule

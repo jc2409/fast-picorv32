@@ -163,10 +163,11 @@ spiflash_tb.vvp: spiflash.v spiflash_tb.v
 cmos.log: spimemio.v simpleuart.v picosoc.v ../picorv32.v
 	yosys -l cmos.log -p 'synth -top picosoc; abc -g cmos2; opt -fast; stat' $^
 
-# ---- I-cache unit testbench (self-checking) ----
-# tb_dm   drives icache_multiword_lookahead       (direct-mapped)
-# tb_2way drives icache_multiword_lookahead_2way  (2-way, LRU)
-# `make icache_test` runs both; each prints "ALL TESTS PASSED" on success.
+# ---- icache testbenches ----
+# tb_dm         = icache_multiword_lookahead       (direct mapped)
+# tb_2way       = icache_multiword_lookahead_2way  (2-way, LRU)
+# tb_2way_eqcap = 2-way shrunk to tb_dm's capacity
+# `make icache_test` builds and runs all three - look for "ALL TESTS PASSED"
 
 icache_tb_dm.vvp: icache_tb.v icache.v
 	iverilog -g2012 -o $@ -s tb_dm $^
@@ -174,7 +175,7 @@ icache_tb_dm.vvp: icache_tb.v icache.v
 icache_tb_2way.vvp: icache_tb.v icache.v
 	iverilog -g2012 -o $@ -s tb_2way $^
 
-# 2-way at equal capacity to tb_dm (half the LINES) -> isolates associativity
+# 2-way cut down to tb_dm's capacity (half the LINES)
 icache_tb_2way_eqcap.vvp: icache_tb.v icache.v
 	iverilog -g2012 -o $@ -s tb_2way_eqcap $^
 
