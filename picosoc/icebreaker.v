@@ -63,7 +63,7 @@ module icebreaker (
 	SB_PLL40_PAD #(
 		.FEEDBACK_PATH("SIMPLE"),
 		.DIVR(4'd0),       
-		.DIVF(7'd73),     // 28.5 MHz!!
+		.DIVF(7'd73),     // 27.75 MHz!!
 		.DIVQ(3'd5),       
 		.FILTER_RANGE(3'b001)
 	) pll (
