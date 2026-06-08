@@ -1,13 +1,12 @@
 /* 
-Lookahead buffer that uses LA interface to register
-the data RAM's data (and address checked)
-1 cycle early so it can be returned with zero cycle delay.
+Lookahead buffer that uses LA interface to start reading the SPRAM
+1 cycle early so the data can be returned with no delay, saving 1 cycle.
 
 Register the address previously sent in the lookahead
 so when the real request comes, we can doublecheck
-that we previously did lookahead and then use that
-to issue ready back immediately!
-Takes the rdata directly from memory interface
+that we previously did lookahead the correct tag and then use that
+to issue ready back immediately. 
+Takes the rdata directly from memory interface. 
 */
 
 module dmem_lookahead_buffer #(
@@ -43,6 +42,11 @@ module dmem_lookahead_buffer #(
     // Extra RAM control signals
     // MUXed with the regular memory interface signals
     // in picosoc.v.
+    // It is maybe a bit ugly to use an extra side interface like this, intstead
+    // of just using the main interface and keeping everything nice and
+    // transparent/tidy, but for somewhat unknown 
+    // reasons, it was found to improve timing to do it this way
+    // (which is a bit counter-intuitive to me...)
     output            ram_la_active,
     output     [21:0] ram_la_addr,
     output            dmem_la_hit
@@ -64,18 +68,27 @@ module dmem_lookahead_buffer #(
     // Store if we had a lookahead last cycle
     reg la_valid;
 
-    // Store the word in RAM that we got through lookahead last cycle
-    // should tell us whether RAM returned data this cycle is good 
-    // checked by dmem_la_hit
-    reg [RAM_ADDR_BITS-1:0] la_word;
+    /*
+    Store the address in RAM that we got through lookahead last cycle
+    should tell us whether RAM returned data this cycle is good 
+    checked by dmem_la_hit
+    "previously look-aheaded address"
+    N.B. we only store the bits necessary to address the ram, not the full 32 bit address
+    to save some logic cells.
+    Maybe storing this and perfomring the check isn't necessary, but 
+    the formal assertions near bottom of picorv32.v only assert that 
+    lookahead is followed by the right mem request, not that
+    every mem request is necessarily preceded by a lookahead, so it's
+    probably better to check. */
+    reg [RAM_ADDR_BITS-1:0] prev_la_addr; 
 
     always @(posedge clk) begin
         if (!resetn) begin
             la_valid <= 1'b0;
-            la_word  <= 0;
+            prev_la_addr  <= 0;
         end else begin
             la_valid <= la_ram_read;
-            la_word  <= cpu_mem_la_addr[RAM_ADDR_BITS+1:2]; // [9:2]
+            prev_la_addr  <= cpu_mem_la_addr[RAM_ADDR_BITS+1:2]; // [9:2]
         end
     end
 
@@ -88,7 +101,7 @@ module dmem_lookahead_buffer #(
     assign dmem_la_hit =
         la_valid &&
         real_ram_read &&
-        la_word == cpu_mem_addr[RAM_ADDR_BITS+1:2];
+        prev_la_addr == cpu_mem_addr[RAM_ADDR_BITS+1:2];
 
     // Most signals pass through directly
     // We control the cpu_mem_ready signal directly to send back quickly
@@ -103,6 +116,7 @@ module dmem_lookahead_buffer #(
     assign mem_wdata = cpu_mem_wdata;
     assign mem_wstrb = cpu_mem_wstrb;
 
+    // The sligthly ugly extra side-interface used for mysterious timing reasons
     assign ram_la_active = la_ram_read;
     assign ram_la_addr   = cpu_mem_la_addr[23:2];
 

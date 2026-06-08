@@ -100,7 +100,9 @@ module picosoc (
 		irq[7] = irq_7;
 	end
 
-	// Data flows as cpu_mem_* --> icache --> intermediate_mem_* -> dmem lookahead buffer -> memory system
+	// Data flows as cpu_mem_* --> icache --> intermediate_mem_* -> dmem lookahead module -> memory system
+	// Both the icache and dmem lookahead module are transparent (pass through the transaction) for 
+	// transactions that don't involve it. 
 
 	// Memory system-facing memory interface
 	wire mem_valid;
@@ -272,6 +274,9 @@ module picosoc (
 				.mem_ready(mem_ready),
 				.mem_rdata(mem_rdata),
 
+				// Extra side interface used to directly access
+				// the SPRAM. We could've used the existing interface
+				// but this works out better for timing for some reason.
 				.ram_la_active(ram_la_active),
 				.ram_la_addr(ram_la_addr),
 				.dmem_la_hit(dmem_la_hit)

@@ -75,14 +75,12 @@ module dmem_lookahead_buffer_tb ();
     end
 
     /*
-        Simple RAM model for test bench purposes - model the bram. 
+        Simple RAM model for test bench purposes - model the SPRAM. 
 
-        If the DUT asks for a lookahead RAM read, this RAM puts the requested
+        If the dmem lookahead asks for a lookahead RAM read, this RAM puts the requested
         word into mem_rdata on the next clock edge.
-
         That means on the following cycle, if the real CPU request matches,
-        the DUT can immediately return mem_rdata.
-    */
+        the DUT can immediately return mem_rdata. */
     always @(posedge clk) begin
         if (ram_la_active) begin
             mem_rdata <= ram[ram_la_addr[RAM_ADDR_BITS-1:0]];
