@@ -1,62 +1,43 @@
 [![.github/workflows/ci.yml](https://github.com/YosysHQ/picorv32/actions/workflows/ci.yml/badge.svg)](https://github.com/YosysHQ/picorv32/actions/workflows/ci.yml)
 
-Benchmark Design
-================
+Fast PicoRV32 - GB3 Project (Group 5)
+=====================================
 
-## Benchmark Goal
+Andrew Choi, Emma Davis, and Kevin Liu
 
-The benchmark was designed with the following criteria in mind:
+## Documentation and Results
 
-- **Our cache is large**: the final best-performing cache is 64 sets, 2 ways, and 16 words per line, allowing a total of 2,048 instructions. Therefore, the benchmark should highlight that our processor is performant even with a large benchmark program loop, with close to this many number of instructions, demonstrating advantages over teams who may have implemented a smaller cache.
-- **Our cache is associative**. If possible, the benchmark should be designed to highlight how the associativity reduces conflict misses, such as in situations where the benchmark main loop jumps around in the program file instead of staying in a sequential set of instructions.
-- **We have data memory lookahead** for memory read instructions, so the benchmark should include load instructions (such as using a lookup table).
-- It would be nice to have a benchmark that does a task that could be useful in the real-world.
+The documentation folder in our submission contains files detailing things we worked on and changes we made to the processor, as well as data and results. 
 
-## Benchmark Design
+## Files Created and Modified
 
-The final benchmark is an iteration of the initial polynomial numerical integration used for preliminary testing. It loops through integrating 19 different 2-D quadratic polynomials sequentially for each x and y coordinate in a 48x48 grid. It also adds an additional "sinusoidal" term to each polynomial based on a mock sin() lookup table, to use additional load instructions. An example of the core code for one of the 19 polynomials is below:
+Our submission includes the entire codebase as a zip file to allow easy reproduction of our processor design. 
 
-```
-    uint32_t x2 = x*x;
-    uint32_t y2 = y*y;
-    uint32_t xy = x*y;
-    uint32_t z = 3*x2 + 11*y2 + 8*xy + 6*x + 32*y + 1497;
-    int32_t t = (11*(int32_t)x + 7*(int32_t)y + 15) * sin_val;
-    z += (uint32_t)t;
-    __asm__ volatile ("" : "+r"(z));
-    return z;
-```
+The following files of the processor's source code were created/modified to implement our changes:
 
-This benchmark is large, as intended. The main run_workload loop function is more than 400 instructions long, and the 19 polynomial calculations total to around 1300 instructions (around 69 instructions per polynomial), for a total of 1700 instructions. This is enough to fit in our 2048 instruction cache, but not fit in a smaller 1024 instruction cache. (The number of polynomials was based on testing to find the largest number that could fit in our cache without conflict misses). 
+- `picosoc/icache.v`: contains the instruction cache design used in the final processor
+- `picosoc/icache_design_iterations.v`: contains older iterations of the instruction cache
+- `picosoc/dmem_lookahead_buffer.v`: contains the data memory lookahead module
+- `picosoc/picosoc.v`: modified to instantiate the instruction cache and data memory lookahead module
+- `picosoc/spimemio.v`: for Quad-SPI DDR flash mode as a hardware default
+- `picosoc/icebreaker.v`: 
+- `picorv32.v`:
+- 
 
-The benchmark also generates a large number of conflict misses for a non-associative cache. This is because due to the length of the polynomial function definitions at the start of the file (there are 64 polynomial definitions included on purpose, even though only 19 are used), the addresses of instructions within the functions to calculate the 4th through the 11th polynomials are made to be exactly 0x4000 = 4096 instructions apart from the main run_workload() function! Therefore, any direct-mapped cache 4096 instructions or smaller would have conflict misses even if there is still capacity in the cache. But a two-way cache would be able to keep both the polynomial instruction and run_workload instruction in its two separate ways. 
+The following files were created to verify our design:
 
-Since the benchmark uses a sine LUT (and other parts of the polynomial calculation logic uses load instructions too), more than a quarter of instructions are memory loads, allowing our data memory lookahead interface to improve CPI by around 0.26. 
+- `picosoc/dmem_lookahead_buffer_tb.v`: simulation testbench for the data memory lookahead module
+- 
 
-## Effect of Hot-Loop Size and Associativity
+The following files were created/modified as part of our workflow:
 
-The figure below shows that before the hot-loop instruction count exceeds the cache size (at around 22 polynomials), the associative cache indeed outperforms the direct-mapped cache, and this is clearly due to avoided conflict misses. Our benchmark, at 19 polynomials, is done at the "sweet-spot" - the largest instruction count supported by the associative cache before noticeable conflict misses. Interestingly, the direct mapped cache outperforms the associative cache for when the number of instructions exceeds the cache capacity. This is a little surprising but not impossible (for an example, consider 8-line direct mapped vs 4x2-way cache for instruction stream 0, 4, 8, 0, 4, 8...).
-
-<img width="670" height="411" alt="image" src="https://github.com/user-attachments/assets/ff917e72-6a0a-40e0-af57-f2866073a92a" />
+- `picosoc/Makefile`
+- `picosoc/group5_benchmark.c`: secret benchmark for competition
+- ... Emma's scripts: list them here
 
 
-## Results
 
-As intended, our benchmark demonstrates the advantage of our full configuration - removing any of the three aforementioned elements (large size, associativity, data lookeahead) noticeably deteriorates performance. 
 
-| Configuration          |     CPI | 
-| -----------------------| -------:| 
-| 64x2x16 Cache, Associative, Data Lookahead    |  4.7135 |  
-| Same, without associativity (128x16 cache)  |  9.5077 |
-| Same, without data lookahead   |  4.9738 |
-| Same, but cache half the size (32x2x16) | 13.4983 |
-| Baseline picorv32, no cache, no lookahead| 10.1860 |
-
-Our full configuration outperforms the baseline design with no cache and no datalookahead whatsoever, which achieves 10.1860 CPI, by a factor of 2.161x. 
-
-If a team isn't using the fast QDDR SPI flash, and has a non-associative cache or smaller cache, CPI skyrockets to around 39-69! Our benchmark file doesn't enable QDDR SPI flash, but our processor turns it on in the hardware (register reset value in spimemio.v)
-
-Note that the cache-too-small case achieves worse CPI of ~13.5 than no cache at all, likely due to the high words-per-line requiring sometimes-unused fills. But since all teams are building caches and we have the largest possible cache in BRAM, I expect any team's cache-oriented benchmark should fit in our cache, so I'm not too worried about this case). 
 
 Latest Cache + Data Memory Lookahead Buffer Benchmark Data
 ==========================================================
@@ -264,69 +245,6 @@ new frequency, update **all** of these so they agree:
 > dividers and the `F_CPU` macro, **not** the prose comments — trust the
 > numbers above (16.5 MHz with the dividers as currently committed).
 
-Cache Experimentation and Changes
-======================================
-
-**Preliminary Results**
- 
-| Integral Benchmark     |     CPI | 
-| -----------------------| -------:| 
-| Baseline (No Cache)    |  9.9374 |  
-| 128x16 Cache           |  5.9998 |
-| 64x16 with lookahead   |  5.0736 |
-
-| Bubble Sort Benchmark  |     CPI | 
-| -----------------------| -------:| 
-| Baseline (No Cache)    |  10.991 |  
-| 128x16 Cache           |  5.5699 |
-| 64x16 with lookahead   |  4.5159 |
-
-
-The file picosoc/icache.v contains the caches Kevin wrote. 
-The caches go in between the cpu's memory interface and the memory interface in picosoc.v (where the cache is instantiated), preserving the shape of the interface on both sides.
-There are many versions of the cache, with description/rationale. "Good" iterations are marked with (*)
-
-The main one to be used for the final processor is icache_multiword_lookahead.
-
-icache_zerocycle
-
-- This is a very basic cache with no state machine, and entirely combinational (direct pass-through of memory (except when valid signal is intercepted for a cache hit, and returned ifetch data is copied into the cache). While it was useful as a development step, it has little practical use, since putting it on BRAM would require 1-cycle read but putting it on LCs means maximum cache size is too small to be practical.
-- One word per line, maximum 8-16 lines on LCs only.
-
-icache (*)
-
-- Basic cache, now with a 1-cycle lookup delay driven by a simple 3-state FSM. Still combinational pass through except for ifetch instructions. If it's an ifetch then we wait a cycle for the BRAM access, then process hit/miss. 
-- One word per line, maximum 128 lines (MUX/line select logic gets expensive fast). This is a decent amount - basic polynomial integral benchmark is around 27 lines.
-
-icache_first_miss_bypass
-
-- Same as icache, with a small change: cache lines are only updated upon the second miss (to make the cache "sticky"). This was intended to reduce thrashing for when the cache is too small for the hot-loop (or hot loop has some instructions that are very hot and other instructions that are called once in a while) (e.g. if the hotloop is 32 instructions and the cache is only 16 lines, we would prefer some 16 lines still stay there, instead of constant misses).
-- But upon testing the benefit was not high enough to justify the larger LC cost.
-
-icache_random_bypass
-
-- Same idea as first_miss_bypass but we only update cache instructions with a certain probability (e.g. 25% or 50%) every miss. This is intended so that occasional instructions are less likely to be in the cache for a long time and hot instructions can stay in cache more. Also was intended so performance deterioration isn't as sudden.
-- Upon testing this was rather ineffective.
-
-icache_multiword (*)
-
-- Based on icache, but a significant architectural change to allow multiple words per line
-- This is a valuable change because currently we're limited by maximum number of lines (~128) due to muxing logic, storing tag/valid, etc, but the BRAM still had space (128x1 used 8/30).
-- On miss, fill the whole line (multiple words) - so there's a trade-off between cache size (words per line) and # of potentially unnecessary reads
-- Has a 4-state FSM for IDLE, LOOKUP (check if hit or miss), FILL, RESP, and an internal counter to keep track of which line is being filled
-- Approx largest size that fits is 128x16 (2,048 instructions) - that's massive.
-
-icache_multiword_first_miss_bypass
-
-- Same rationale as icache_first_miss_bypass applied to icache_multiword
-- This was ineffective. Costs a lot of extra logic, and when there are multiple words per line and it misses once, it was probably going to miss again anyway.
-
-icache_multiword_lookahead (*)
-
-- The current best cache design
-- Same as icache_multiword, but uses the CPU lookahead interface to allow the cache to find the cached data early, so now when the actual ifetch comes we can respond to hits with zero-cycle delay again! Saves close to 1CPI on benchmarks compared to regular multiword cache (but may need smaller cache to fit in additional logic).
-- Lookahead also removes the need for the 1-cycle delay LOOKUP state so we only need 3-state FSM
-- Largest working size 64x16
 
 
 Unit Testbenches (I-cache & Compact Divider)
