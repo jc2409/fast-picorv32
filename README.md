@@ -33,10 +33,31 @@ The following files were created/modified as part of our workflow:
 
 - `picosoc/Makefile`
 - `picosoc/group5_benchmark.c`: secret benchmark for competition
-- ... Emma's scripts: list them here
+- `picosoc/interactive_ppa.py`, `picosoc/run_ppa_fixed.py`, `picosoc/run_hardware_bench.py`, `run_all.sh`: automation scripts for configuration sweep, PPA, and hardware benchmarking (see section below)
 
+## Automated PPA and Hardware Benchmarking
 
+To enable systematic design‑space exploration, a set of Python scripts that automate the entire flow from configuration generation to hardware performance measurement were developed. The scripts are located in `picosoc/` and are designed to be run from the top‑level directory.
+### Overview of the automation flow
 
+1. **`interactive_ppa.py`** – interactively selects binary CPU parameters (e.g., `BARREL_SHIFTER`, `ENABLE_MUL`, `ENABLE_FAST_MUL`), cache parameters (`CACHE_LINES`, `CACHE_WORDS_PER_LINE`), and cache module. Generates `configs.csv` with one row per configuration.
+2. **`run_ppa_fixed.py`** – reads `configs.csv`; for each configuration, copies Verilog sources, overrides parameters, runs Yosys synthesis, nextpnr place‑and‑route, icetime timing analysis, and icepack to produce `design.bin`. It also runs functional tests using `icebreaker_tb.v` (SoC simulation) and, if they pass, compiles the benchmark firmware (`group5_benchmark.c`) into `benchmark.bin`.
+3. **`run_hardware_bench.py`** – for a given configuration, programs the FPGA with `design.bin` and `benchmark.bin`, captures the UART output, and parses `CYCLES=0x…` and `INSTNS=0x…` to compute CPI. Results are appended to `hardware_results.csv`.
+4. **`run_all.sh`** – orchestrates the whole process: asks to regenerate `configs.csv`, then loops over each configuration, calling `run_ppa_fixed.py` and `run_hardware_bench.py` sequentially. It saves results incrementally, so a partial run does not lose already collected data.
+
+### Required environment
+
+- **OSS CAD Suite** (yosys, nextpnr, icepack, icetime, iceprog) – source the environment before running.
+- **RISC‑V toolchain** (`riscv32-unknown-elf-gcc`, etc.) – must be in `PATH`.
+- **Python 3** with `pyserial` installed.
+- The iCEBreaker board attached and accessible via USB (typically `/dev/ttyUSB1`).
+
+### Usage
+
+```bash
+cd ~/final   # or the top‑level directory containing the `picosoc/` folder
+./run_all.sh
+```
 
 
 Latest Cache + Data Memory Lookahead Buffer Benchmark Data
