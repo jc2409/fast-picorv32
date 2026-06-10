@@ -80,6 +80,18 @@ The memory handshake requires one rising edge to complete no matter what.
    
 */
 
+// Some tools don't seem to like the SystemVerilog $clog2
+function integer clog2;
+    input integer value;
+    integer v;
+    begin
+        v = value - 1;
+        for (clog2 = 0; v > 0; clog2 = clog2 + 1)
+            v = v >> 1;
+    end
+endfunction
+
+
 
 module icache_multiword_lookahead #(
     parameter integer LINES = 16,

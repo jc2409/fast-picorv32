@@ -68,18 +68,10 @@ module dmem_lookahead_buffer #(
     // Store if we had a lookahead last cycle
     reg la_valid;
 
-    /*
-    Store the address in RAM that we got through lookahead last cycle
-    should tell us whether RAM returned data this cycle is good 
-    checked by dmem_la_hit
-    "previously look-aheaded address"
-    N.B. we only store the bits necessary to address the ram, not the full 32 bit address
-    to save some logic cells.
-    Maybe storing this and perfomring the check isn't necessary, but 
-    the formal assertions near bottom of picorv32.v only assert that 
-    lookahead is followed by the right mem request, not that
-    every mem request is necessarily preceded by a lookahead, so it's
-    probably better to check. */
+    // Store the address ("previously look-aheaded address") in RAM that we got through lookahead last cycle
+    // should tell us whether RAM returned data this cycle is good, checked by dmem_la_hit
+    // N.B. we only store the bits necessary to address the ram, not the full 32 bit address
+    // to save some logic cells.
     reg [RAM_ADDR_BITS-1:0] prev_la_addr; 
 
     always @(posedge clk) begin
@@ -108,8 +100,7 @@ module dmem_lookahead_buffer #(
     assign cpu_mem_ready = dmem_la_hit || mem_ready;
     assign cpu_mem_rdata = mem_rdata;
 
-    // Intercept the valid signal going to memory system
-    // if we got a hit (can just send back ready directly)
+
     assign mem_valid = dmem_la_hit ? 1'b0 : cpu_mem_valid;
     assign mem_instr = cpu_mem_instr;
     assign mem_addr  = cpu_mem_addr;
