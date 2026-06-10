@@ -1,0 +1,2 @@
+config_name,barrel_shifter,enable_mul,enable_div,enable_counters,enable_compressed,enable_fast_mul,cache_lines,cache_words_per_line,cache_module
+teammate_fastmul_64x2x16,0,1,1,1,0,1,64,16,icache_multiword_lookahead_2way

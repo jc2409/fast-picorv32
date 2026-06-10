@@ -1,0 +1,7 @@
+parameter,coef_luts,coef_fmax_mhz
+barrel_shifter,87.25000000000011,0.176875
+enable_mul,0.0,0.0
+enable_div,0.0,1.7763568394002505e-15
+enable_fast_mul,-2.2737367544323206e-13,-8.881784197001252e-16
+enable_counters,131.5,-0.05437500000000206
+enable_irq,4197.125,16.330624999999998
